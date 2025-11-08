@@ -10,21 +10,14 @@ import (
 	"github.com/ELMOCPC/Backend/bootstrap"
 	"github.com/ELMOCPC/Backend/internal/application/service"
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
-	"github.com/ELMOCPC/Backend/internal/domain/communication"
 	postgres2 "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
-	redis2 "github.com/ELMOCPC/Backend/internal/domain/repository/redis"
 	"github.com/ELMOCPC/Backend/internal/domain/storage/s3"
-	"github.com/ELMOCPC/Backend/internal/infrastructure/communication/sms"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/jwt"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/localization"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/repository/postgres"
-	"github.com/ELMOCPC/Backend/internal/infrastructure/repository/redis"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/seed"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/storage"
-	"github.com/ELMOCPC/Backend/internal/presentation/controller/calc"
-	"github.com/ELMOCPC/Backend/internal/presentation/controller/form"
-	"github.com/ELMOCPC/Backend/internal/presentation/controller/user"
 	"github.com/ELMOCPC/Backend/internal/presentation/middleware"
 	"github.com/google/wire"
 )
@@ -34,8 +27,8 @@ import (
 func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 	bootstrapDatabase := ProvideDBConfig(config)
 	postgresDatabase := database.NewPostgresDatabase(bootstrapDatabase)
-	bootstrapRedis := ProvideRDBConfig(config)
-	redisDatabase := database.NewRedisDatabase(bootstrapRedis)
+	redis := ProvideRDBConfig(config)
+	redisDatabase := database.NewRedisDatabase(redis)
 	wireDatabase := &Database{
 		DB:  postgresDatabase,
 		RDB: redisDatabase,
@@ -56,42 +49,9 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 		Localization: localizationMiddleware,
 		Auth:         authMiddleware,
 	}
-	userCacheRepository := redis.NewUserCacheRepository(redisDatabase)
-	smsGateway := ProvideSMSGatewayConfig(config)
-	smsTemplates := ProvideSMSTemplates(config)
-	smsService := sms.NewSMSService(smsGateway, smsTemplates)
-	otp := ProvideOTPConfig(config)
-	otpService := service.NewOTPService(constants, otp, userCacheRepository)
-	actionLogRepository := postgres.NewActionLogRepository()
-	actionLogService := service.NewActionLogService(constants, actionLogRepository, postgresDatabase)
-	userService := service.NewUserService(constants, userRepository, userCacheRepository, jwtService, smsService, otpService, actionLogService, postgresDatabase)
-	generalUserController := user.NewGeneralUserController(constants, userService)
-	formRepository := postgres.NewFormRepository()
-	s3 := ProvideStorageConfig(config)
-	s3Storage := storage.NewS3Storage(constants, s3)
-	formService := service.NewFormService(constants, formRepository, userService, actionLogService, s3Storage, postgresDatabase)
-	generalFormController := form.NewGeneralFormController(formService)
-	generalControllers := &GeneralControllers{
-		UserController: generalUserController,
-		FormController: generalFormController,
-	}
-	pagination := ProvidePagination(config)
-	adminUserController := user.NewAdminUserController(constants, userService, pagination)
-	adminFormController := form.NewAdminFormController(constants, formService, userService, pagination)
-	actionLogController := actionlog.NewActionLogController(actionLogService, formService, userService, pagination)
-	calcURL := ProvideCalcURL(config)
-	calcService := service.NewCalcService(constants, formRepository, actionLogService, postgresDatabase, calcURL)
-	adminCalcController := calc.NewAdminCalcController(constants, calcService)
-	adminControllers := &AdminControllers{
-		UserController:      adminUserController,
-		FormController:      adminFormController,
-		ActionLogController: actionLogController,
-		CalcController:      adminCalcController,
-	}
-	customerFormController := form.NewCustomerFormController(constants, formService, pagination)
-	customerControllers := &CustomerControllers{
-		FormController: customerFormController,
-	}
+	generalControllers := &GeneralControllers{}
+	adminControllers := &AdminControllers{}
+	customerControllers := &CustomerControllers{}
 	controllers := &Controllers{
 		General:  generalControllers,
 		Admin:    adminControllers,
@@ -99,10 +59,8 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 	}
 	superAdmin := ProvideSuperAdminCredentials(config)
 	roleSeeder := seed.NewRoleSeeder(superAdmin, userRepository, postgresDatabase)
-	dummySeeder := seed.NewDummySeeder(postgresDatabase, userRepository, formRepository)
 	seeds := &Seeds{
-		RoleSeeder:  roleSeeder,
-		DummySeeder: dummySeeder,
+		RoleSeeder: roleSeeder,
 	}
 	application := NewApplication(wireDatabase, middlewares, controllers, seeds)
 	return application, nil
@@ -112,15 +70,15 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 
 var DatabaseProviderSet = wire.NewSet(database.NewPostgresDatabase, database.NewRedisDatabase, wire.Bind(new(database.Database), new(*database.PostgresDatabase)), wire.Bind(new(database.Cache), new(*database.RedisDatabase)), wire.Struct(new(Database), "*"))
 
-var RepositoryProviderSet = wire.NewSet(postgres.NewUserRepository, postgres.NewFormRepository, postgres.NewActionLogRepository, redis.NewUserCacheRepository, wire.Bind(new(postgres2.UserRepository), new(*postgres.UserRepository)), wire.Bind(new(postgres2.FormRepository), new(*postgres.FormRepository)), wire.Bind(new(postgres2.ActionLogRepository), new(*postgres.ActionLogRepository)), wire.Bind(new(redis2.UserCacheRepository), new(*redis.UserCacheRepository)))
+var RepositoryProviderSet = wire.NewSet(postgres.NewUserRepository, wire.Bind(new(postgres2.UserRepository), new(*postgres.UserRepository)))
 
-var ServiceProviderSet = wire.NewSet(service.NewUserService, service.NewFormService, service.NewJWTService, service.NewOTPService, sms.NewSMSService, service.NewActionLogService, service.NewCalcService, wire.Bind(new(usecase.UserService), new(*service.UserService)), wire.Bind(new(usecase.FormService), new(*service.FormService)), wire.Bind(new(usecase.OtpService), new(*service.OTPService)), wire.Bind(new(usecase.JwtService), new(*service.JWTService)), wire.Bind(new(communication.SmsService), new(*sms.SMSService)), wire.Bind(new(usecase.ActionLogService), new(*service.ActionLogService)), wire.Bind(new(usecase.CalcService), new(*service.CalcService)))
+var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)))
 
-var GeneralControllerProviderSet = wire.NewSet(user.NewGeneralUserController, form.NewGeneralFormController, wire.Struct(new(GeneralControllers), "*"))
+var GeneralControllerProviderSet = wire.NewSet(wire.Struct(new(GeneralControllers), "*"))
 
-var AdminControllerProviderSet = wire.NewSet(user.NewAdminUserController, form.NewAdminFormController, actionlog.NewActionLogController, calc.NewAdminCalcController, wire.Struct(new(AdminControllers), "*"))
+var AdminControllerProviderSet = wire.NewSet(wire.Struct(new(AdminControllers), "*"))
 
-var CustomerControllerProviderSet = wire.NewSet(form.NewCustomerFormController, wire.Struct(new(CustomerControllers), "*"))
+var CustomerControllerProviderSet = wire.NewSet(wire.Struct(new(CustomerControllers), "*"))
 
 var ControllerProviderSet = wire.NewSet(wire.Struct(new(Controllers), "*"))
 
@@ -128,7 +86,7 @@ var AdapterProviderSet = wire.NewSet(jwt.NewJWTKeyManager, localization.NewTrans
 
 var MiddlewareProviderSet = wire.NewSet(middleware.NewCorsMiddleware, middleware.NewRecoveryMiddleware, middleware.NewLocalizationMiddleware, middleware.NewAuthMiddleware, wire.Struct(new(Middlewares), "*"))
 
-var SeedProviderSet = wire.NewSet(seed.NewRoleSeeder, seed.NewDummySeeder, wire.Struct(new(Seeds), "*"))
+var SeedProviderSet = wire.NewSet(seed.NewRoleSeeder, wire.Struct(new(Seeds), "*"))
 
 func ProvideDBConfig(container *bootstrap.Config) *bootstrap.Database {
 	return &container.Env.Database
@@ -150,14 +108,6 @@ func ProvideStorageConfig(container *bootstrap.Config) *bootstrap.S3 {
 	return &container.Env.S3
 }
 
-func ProvideSMSGatewayConfig(container *bootstrap.Config) *bootstrap.SMSGateway {
-	return &container.Env.SMSGateway
-}
-
-func ProvideSMSTemplates(container *bootstrap.Config) *bootstrap.SMSTemplates {
-	return &container.Constants.SMSTemplates
-}
-
 func ProvideJWTKeysPath(container *bootstrap.Config) *bootstrap.JWTKeysPath {
 	return &container.Constants.JWTKeysPath
 }
@@ -168,10 +118,6 @@ func ProvideSuperAdminCredentials(container *bootstrap.Config) *bootstrap.SuperA
 
 func ProvidePagination(container *bootstrap.Config) *bootstrap.Pagination {
 	return &container.Env.Pagination
-}
-
-func ProvideCalcURL(container *bootstrap.Config) *bootstrap.CalcURL {
-	return &container.Env.CalcURL
 }
 
 var ProviderSet = wire.NewSet(
@@ -189,12 +135,9 @@ var ProviderSet = wire.NewSet(
 	ProvideRDBConfig,
 	ProvideOTPConfig,
 	ProvideStorageConfig,
-	ProvideSMSGatewayConfig,
-	ProvideSMSTemplates,
 	ProvideJWTKeysPath,
 	ProvideSuperAdminCredentials,
 	ProvidePagination,
-	ProvideCalcURL,
 	SeedProviderSet,
 )
 
@@ -204,19 +147,12 @@ type Database struct {
 }
 
 type GeneralControllers struct {
-	UserController *user.GeneralUserController
-	FormController *form.GeneralFormController
 }
 
 type AdminControllers struct {
-	UserController      *user.AdminUserController
-	FormController      *form.AdminFormController
-	ActionLogController *actionlog.ActionLogController
-	CalcController      *calc.AdminCalcController
 }
 
 type CustomerControllers struct {
-	FormController *form.CustomerFormController
 }
 
 type Controllers struct {
@@ -233,8 +169,7 @@ type Middlewares struct {
 }
 
 type Seeds struct {
-	RoleSeeder  *seed.RoleSeeder
-	DummySeeder *seed.DummySeeder
+	RoleSeeder *seed.RoleSeeder
 }
 
 type Application struct {

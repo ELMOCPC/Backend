@@ -4,5 +4,7 @@ import "github.com/ELMOCPC/Backend/internal/infrastructure/database"
 
 type User struct {
 	database.Model
-	Roles []Role `gorm:"many2many:user_roles;constraint:OnDelete:CASCADE"`
+	Phone    string `gorm:"type:varchar(11);unique"`
+	Password string `gorm:"type:varchar(255)"`
+	Roles    []Role `gorm:"many2many:user_roles;constraint:OnDelete:CASCADE"`
 }

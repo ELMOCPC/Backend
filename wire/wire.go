@@ -8,13 +8,11 @@ import (
 	"github.com/ELMOCPC/Backend/internal/application/service"
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
 	domainPostgre "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
-	domainRedis "github.com/ELMOCPC/Backend/internal/domain/repository/redis"
 	domainS3 "github.com/ELMOCPC/Backend/internal/domain/storage/s3"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 	infraJWT "github.com/ELMOCPC/Backend/internal/infrastructure/jwt"
 	infraLocalization "github.com/ELMOCPC/Backend/internal/infrastructure/localization"
 	infraPostgre "github.com/ELMOCPC/Backend/internal/infrastructure/repository/postgres"
-	infraRedis "github.com/ELMOCPC/Backend/internal/infrastructure/repository/redis"
 	seed "github.com/ELMOCPC/Backend/internal/infrastructure/seed"
 	infraStorage "github.com/ELMOCPC/Backend/internal/infrastructure/storage"
 	"github.com/ELMOCPC/Backend/internal/presentation/middleware"
@@ -31,9 +29,7 @@ var DatabaseProviderSet = wire.NewSet(
 
 var RepositoryProviderSet = wire.NewSet(
 	infraPostgre.NewUserRepository,
-	infraRedis.NewUserCacheRepository,
 	wire.Bind(new(domainPostgre.UserRepository), new(*infraPostgre.UserRepository)),
-	wire.Bind(new(domainRedis.UserCacheRepository), new(*infraRedis.UserCacheRepository)),
 )
 
 var ServiceProviderSet = wire.NewSet(

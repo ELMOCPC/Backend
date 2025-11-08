@@ -2,10 +2,14 @@ package postgres
 
 import (
 	"github.com/ELMOCPC/Backend/internal/domain/entity"
+	"github.com/ELMOCPC/Backend/internal/domain/enum"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 )
 
 type UserRepository interface {
+	FindUserByPhone(db database.Database, phone string) (*entity.User, error)
+	CreateUser(db database.Database, user *entity.User) error
+	UpdateUser(db database.Database, user *entity.User) error
 	FindUserByID(db database.Database, id uint) (*entity.User, error)
 	FindUserRoles(db database.Database, user *entity.User) error
 	FindRolePermissions(db database.Database, role *entity.Role) error
