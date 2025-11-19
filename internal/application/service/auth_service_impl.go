@@ -34,7 +34,7 @@ func (as *AuthService) SignUp(firstName, lastName, email, phone, password string
 		return nil, "", "", err
 	}
 	if existingUserByEmail != nil {
-		conflictErr := &exception.ConflictErrors{}
+		conflictErr := exception.ConflictErrors{}
 		conflictErr.Add("email", "already exists")
 		return nil, "", "", conflictErr
 	}
@@ -45,7 +45,7 @@ func (as *AuthService) SignUp(firstName, lastName, email, phone, password string
 		return nil, "", "", err
 	}
 	if existingUserByPhone != nil {
-		conflictErr := &exception.ConflictErrors{}
+		conflictErr := exception.ConflictErrors{}
 		conflictErr.Add("phone", "already exists")
 		return nil, "", "", conflictErr
 	}

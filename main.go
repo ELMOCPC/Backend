@@ -25,6 +25,8 @@ func main() {
 		&entity.User{},
 		&entity.Role{},
 		&entity.Permission{},
+		&entity.Team{},
+		&entity.TeamInvitation{},
 	)
 
 	// Run database migrations and seeders
