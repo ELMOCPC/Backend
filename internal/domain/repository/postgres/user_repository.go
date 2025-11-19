@@ -8,6 +8,7 @@ import (
 
 type UserRepository interface {
 	FindUserByPhone(db database.Database, phone string) (*entity.User, error)
+	FindUserByEmail(db database.Database, email string) (*entity.User, error)
 	CreateUser(db database.Database, user *entity.User) error
 	UpdateUser(db database.Database, user *entity.User) error
 	FindUserByID(db database.Database, id uint) (*entity.User, error)

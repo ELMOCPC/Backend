@@ -64,8 +64,11 @@ type BucketName struct {
 }
 
 type SuperAdmin struct {
-	Phone    string
-	Password string
+	FirstName string
+	LastName  string
+	Email     string
+	Phone     string
+	Password  string
 }
 
 func NewEnv() *Env {
@@ -98,8 +101,11 @@ func NewEnv() *Env {
 			MaxAttempts:  getEnvInt("OTP_MAX_ATTEMPTS", 3),
 		},
 		SuperAdmin: SuperAdmin{
-			Phone:    os.Getenv("SUPER_ADMIN_PHONE"),
-			Password: os.Getenv("SUPER_ADMIN_PASSWORD"),
+			FirstName: os.Getenv("SUPER_ADMIN_FIRST_NAME"),
+			LastName:  os.Getenv("SUPER_ADMIN_LAST_NAME"),
+			Email:     os.Getenv("SUPER_ADMIN_EMAIL"),
+			Phone:     os.Getenv("SUPER_ADMIN_PHONE"),
+			Password:  os.Getenv("SUPER_ADMIN_PASSWORD"),
 		},
 		S3: S3{
 			Region:    os.Getenv("S3_REGION"),

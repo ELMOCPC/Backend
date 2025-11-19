@@ -15,6 +15,7 @@ import (
 	infraPostgre "github.com/ELMOCPC/Backend/internal/infrastructure/repository/postgres"
 	seed "github.com/ELMOCPC/Backend/internal/infrastructure/seed"
 	infraStorage "github.com/ELMOCPC/Backend/internal/infrastructure/storage"
+	"github.com/ELMOCPC/Backend/internal/presentation/controller"
 	"github.com/ELMOCPC/Backend/internal/presentation/middleware"
 	"github.com/google/wire"
 )
@@ -35,9 +36,12 @@ var RepositoryProviderSet = wire.NewSet(
 var ServiceProviderSet = wire.NewSet(
 	service.NewJWTService,
 	wire.Bind(new(usecase.JwtService), new(*service.JWTService)),
+	service.NewAuthService,
+	wire.Bind(new(usecase.AuthService), new(*service.AuthService)),
 )
 
 var GeneralControllerProviderSet = wire.NewSet(
+	controller.NewAuthController,
 	wire.Struct(new(GeneralControllers), "*"),
 )
 
@@ -133,6 +137,7 @@ type Database struct {
 }
 
 type GeneralControllers struct {
+	AuthController *controller.AuthController
 }
 
 type AdminControllers struct {
