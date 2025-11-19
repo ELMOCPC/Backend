@@ -129,7 +129,11 @@ func (roleSeeder *RoleSeeder) getOrCreateAdmin(adminCred *bootstrap.SuperAdmin) 
 	}
 	if admin == nil {
 		admin = &entity.User{
-			Phone: adminCred.Phone,
+			FirstName: adminCred.FirstName,
+			LastName:  adminCred.LastName,
+			Email:     adminCred.Email,
+			Phone:     adminCred.Phone,
+			Password:  adminCred.Password,
 		}
 		err = roleSeeder.userRepository.CreateUser(roleSeeder.db, admin)
 		if err != nil {

@@ -81,7 +81,7 @@ func handleBindingError(ctx *gin.Context, bindingError exception.BindingError, t
 
 	if numError, ok := bindingError.Err.(*strconv.NumError); ok {
 		message, _ = trans.Translate("errors.numeric", numError.Num)
-	} else if bindingError == http.ErrMissingFile {
+	} else if bindingError.Err == http.ErrMissingFile {
 		message, _ = trans.Translate("errors.fileRequired")
 	}
 

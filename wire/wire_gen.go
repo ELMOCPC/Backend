@@ -18,6 +18,7 @@ import (
 	"github.com/ELMOCPC/Backend/internal/infrastructure/repository/postgres"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/seed"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/storage"
+	"github.com/ELMOCPC/Backend/internal/presentation/controller"
 	"github.com/ELMOCPC/Backend/internal/presentation/middleware"
 	"github.com/google/wire"
 )
@@ -49,7 +50,11 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 		Localization: localizationMiddleware,
 		Auth:         authMiddleware,
 	}
-	generalControllers := &GeneralControllers{}
+	authService := service.NewAuthService(userRepository, jwtService, postgresDatabase)
+	authController := controller.NewAuthController(authService)
+	generalControllers := &GeneralControllers{
+		AuthController: authController,
+	}
 	adminControllers := &AdminControllers{}
 	customerControllers := &CustomerControllers{}
 	controllers := &Controllers{
@@ -72,9 +77,9 @@ var DatabaseProviderSet = wire.NewSet(database.NewPostgresDatabase, database.New
 
 var RepositoryProviderSet = wire.NewSet(postgres.NewUserRepository, wire.Bind(new(postgres2.UserRepository), new(*postgres.UserRepository)))
 
-var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)))
+var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)), service.NewAuthService, wire.Bind(new(usecase.AuthService), new(*service.AuthService)))
 
-var GeneralControllerProviderSet = wire.NewSet(wire.Struct(new(GeneralControllers), "*"))
+var GeneralControllerProviderSet = wire.NewSet(controller.NewAuthController, wire.Struct(new(GeneralControllers), "*"))
 
 var AdminControllerProviderSet = wire.NewSet(wire.Struct(new(AdminControllers), "*"))
 
@@ -147,6 +152,7 @@ type Database struct {
 }
 
 type GeneralControllers struct {
+	AuthController *controller.AuthController
 }
 
 type AdminControllers struct {

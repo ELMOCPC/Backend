@@ -38,6 +38,18 @@ func (userRepository *UserRepository) FindUserByPhone(db database.Database, phon
 	return &user, nil
 }
 
+func (userRepository *UserRepository) FindUserByEmail(db database.Database, email string) (*entity.User, error) {
+	var user entity.User
+	result := db.GetDB().Where("email = ?", email).First(&user)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, result.Error
+	}
+	return &user, nil
+}
+
 func (userRepository *UserRepository) CreateUser(db database.Database, user *entity.User) error {
 	return db.GetDB().Create(user).Error
 }

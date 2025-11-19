@@ -10,12 +10,13 @@ import (
 
 var validate *validator.Validate = validator.New()
 
-func Validate[T any](ctx *gin.Context) T {
+func Validated[T any](ctx *gin.Context) T {
 	var params T
 	if err := ctx.ShouldBindUri(&params); err != nil {
 		bindingError := exception.BindingError{Err: err}
 		panic(bindingError)
 	}
+
 	if err := ctx.ShouldBindQuery(&params); err != nil {
 		bindingError := exception.BindingError{Err: err}
 		panic(bindingError)
@@ -26,6 +27,7 @@ func Validate[T any](ctx *gin.Context) T {
 		panic(bindingError)
 	}
 
+	// Run custom validator on the struct
 	if err := validate.Struct(params); err != nil {
 		if validationErrors, ok := err.(validator.ValidationErrors); ok {
 			panic(formatValidationErrors[T](validationErrors))
