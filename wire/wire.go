@@ -31,6 +31,8 @@ var DatabaseProviderSet = wire.NewSet(
 var RepositoryProviderSet = wire.NewSet(
 	infraPostgre.NewUserRepository,
 	wire.Bind(new(domainPostgre.UserRepository), new(*infraPostgre.UserRepository)),
+	infraPostgre.NewTeamRepository,
+	wire.Bind(new(domainPostgre.TeamRepository), new(*infraPostgre.TeamRepository)),
 )
 
 var ServiceProviderSet = wire.NewSet(
@@ -38,6 +40,8 @@ var ServiceProviderSet = wire.NewSet(
 	wire.Bind(new(usecase.JwtService), new(*service.JWTService)),
 	service.NewAuthService,
 	wire.Bind(new(usecase.AuthService), new(*service.AuthService)),
+	service.NewTeamService,
+	wire.Bind(new(usecase.TeamService), new(*service.TeamService)),
 )
 
 var GeneralControllerProviderSet = wire.NewSet(
@@ -50,7 +54,7 @@ var AdminControllerProviderSet = wire.NewSet(
 )
 
 var CustomerControllerProviderSet = wire.NewSet(
-
+	controller.NewTeamController,
 	wire.Struct(new(CustomerControllers), "*"),
 )
 
@@ -144,6 +148,7 @@ type AdminControllers struct {
 }
 
 type CustomerControllers struct {
+	TeamController *controller.TeamController
 }
 
 type Controllers struct {

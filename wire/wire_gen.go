@@ -56,7 +56,12 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 		AuthController: authController,
 	}
 	adminControllers := &AdminControllers{}
-	customerControllers := &CustomerControllers{}
+	teamRepository := postgres.NewTeamRepository()
+	teamService := service.NewTeamService(teamRepository, userRepository, postgresDatabase)
+	teamController := controller.NewTeamController(teamService, userRepository, postgresDatabase)
+	customerControllers := &CustomerControllers{
+		TeamController: teamController,
+	}
 	controllers := &Controllers{
 		General:  generalControllers,
 		Admin:    adminControllers,
@@ -75,15 +80,15 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 
 var DatabaseProviderSet = wire.NewSet(database.NewPostgresDatabase, database.NewRedisDatabase, wire.Bind(new(database.Database), new(*database.PostgresDatabase)), wire.Bind(new(database.Cache), new(*database.RedisDatabase)), wire.Struct(new(Database), "*"))
 
-var RepositoryProviderSet = wire.NewSet(postgres.NewUserRepository, wire.Bind(new(postgres2.UserRepository), new(*postgres.UserRepository)))
+var RepositoryProviderSet = wire.NewSet(postgres.NewUserRepository, wire.Bind(new(postgres2.UserRepository), new(*postgres.UserRepository)), postgres.NewTeamRepository, wire.Bind(new(postgres2.TeamRepository), new(*postgres.TeamRepository)))
 
-var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)), service.NewAuthService, wire.Bind(new(usecase.AuthService), new(*service.AuthService)))
+var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)), service.NewAuthService, wire.Bind(new(usecase.AuthService), new(*service.AuthService)), service.NewTeamService, wire.Bind(new(usecase.TeamService), new(*service.TeamService)))
 
 var GeneralControllerProviderSet = wire.NewSet(controller.NewAuthController, wire.Struct(new(GeneralControllers), "*"))
 
 var AdminControllerProviderSet = wire.NewSet(wire.Struct(new(AdminControllers), "*"))
 
-var CustomerControllerProviderSet = wire.NewSet(wire.Struct(new(CustomerControllers), "*"))
+var CustomerControllerProviderSet = wire.NewSet(controller.NewTeamController, wire.Struct(new(CustomerControllers), "*"))
 
 var ControllerProviderSet = wire.NewSet(wire.Struct(new(Controllers), "*"))
 
@@ -159,6 +164,7 @@ type AdminControllers struct {
 }
 
 type CustomerControllers struct {
+	TeamController *controller.TeamController
 }
 
 type Controllers struct {
