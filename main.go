@@ -29,12 +29,9 @@ func main() {
 		&entity.TeamInvitation{},
 	)
 
-	// Run database migrations and seeders
 	app.Seeds.RoleSeeder.SeedRoles()
 
-	// Setup and run routes
 	routes.Run(ginEngine, app)
 
-	// Start the server
 	ginEngine.Run(fmt.Sprintf(":%v", config.Env.Server.Port))
 }

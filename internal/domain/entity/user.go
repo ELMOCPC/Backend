@@ -11,5 +11,4 @@ type User struct {
 	Password  string `gorm:"type:varchar(255)"`
 	Roles     []Role `gorm:"many2many:user_roles;constraint:OnDelete:CASCADE"`
 	TeamID    *uint  `gorm:"index"`
-	Team      *Team  `gorm:"foreignKey:TeamID;constraint:OnDelete:SET NULL"`
 }

@@ -4,7 +4,7 @@ up:
 	docker image prune -f
 
 ps:
-	docker ps --format "table {{.Names}}\t{{.Status}}"
+	docker ps --filter "label=com.docker.compose.project=backend" --format "table {{.Names}}\t{{.Status}}"
 
 log:
 	git log --oneline -n 10
