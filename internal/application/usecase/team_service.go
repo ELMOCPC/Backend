@@ -8,6 +8,7 @@ type TeamService interface {
 	GetTeamByID(teamID uint) (*entity.Team, error)
 	GetUserTeam(userID uint) (*entity.Team, error)
 	UpdateTeam(teamID, userID uint, name, description string) (*entity.Team, error)
+	DeleteTeam(teamID, userID uint) error
 
 	// Team members management
 	InviteUserByEmail(teamID, inviterID uint, email string) (*entity.TeamInvitation, error)

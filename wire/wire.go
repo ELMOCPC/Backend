@@ -40,8 +40,6 @@ var ServiceProviderSet = wire.NewSet(
 	wire.Bind(new(usecase.JwtService), new(*service.JWTService)),
 	service.NewAuthService,
 	wire.Bind(new(usecase.AuthService), new(*service.AuthService)),
-	service.NewEmailService,
-	wire.Bind(new(usecase.EmailService), new(*service.EmailService)),
 	service.NewTeamService,
 	wire.Bind(new(usecase.TeamService), new(*service.TeamService)),
 )
@@ -116,17 +114,6 @@ func ProvidePagination(container *bootstrap.Config) *bootstrap.Pagination {
 	return &container.Env.Pagination
 }
 
-func ProvideEmailConfig() *service.EmailConfig {
-	// This returns a basic email config - in production, load from environment
-	return &service.EmailConfig{
-		SMTPServer:     "",
-		SMTPPort:       "587",
-		SenderEmail:    "",
-		SenderPassword: "",
-		SenderName:     "ELMOCPC",
-	}
-}
-
 var ProviderSet = wire.NewSet(
 	DatabaseProviderSet,
 	RepositoryProviderSet,
@@ -145,7 +132,6 @@ var ProviderSet = wire.NewSet(
 	ProvideJWTKeysPath,
 	ProvideSuperAdminCredentials,
 	ProvidePagination,
-	ProvideEmailConfig,
 	SeedProviderSet,
 )
 

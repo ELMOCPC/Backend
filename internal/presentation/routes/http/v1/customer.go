@@ -13,6 +13,7 @@ func SetupCustomerRoutes(routerGroup *gin.RouterGroup, app *wire.Application) {
 		teams.GET("", app.Controllers.Customer.TeamController.GetUserTeam)
 		teams.GET("/:id", app.Controllers.Customer.TeamController.GetTeam)
 		teams.PUT("/:id", app.Controllers.Customer.TeamController.UpdateTeam)
+		teams.DELETE("/:id", app.Controllers.Customer.TeamController.DeleteTeam)
 		teams.POST("/:id/submit", app.Controllers.Customer.TeamController.SubmitTeam)
 		teams.GET("/:id/members", app.Controllers.Customer.TeamController.GetTeamMembers)
 		teams.POST("/:id/invitations", app.Controllers.Customer.TeamController.InviteUser)

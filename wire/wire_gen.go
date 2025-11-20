@@ -57,10 +57,8 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 	}
 	adminControllers := &AdminControllers{}
 	teamRepository := postgres.NewTeamRepository()
-	emailConfig := ProvideEmailConfig()
-	emailService := service.NewEmailService(emailConfig)
-	teamService := service.NewTeamService(teamRepository, userRepository, postgresDatabase, emailService)
-	teamController := controller.NewTeamController(teamService)
+	teamService := service.NewTeamService(teamRepository, userRepository, postgresDatabase)
+	teamController := controller.NewTeamController(teamService, userRepository, postgresDatabase)
 	customerControllers := &CustomerControllers{
 		TeamController: teamController,
 	}
@@ -84,7 +82,7 @@ var DatabaseProviderSet = wire.NewSet(database.NewPostgresDatabase, database.New
 
 var RepositoryProviderSet = wire.NewSet(postgres.NewUserRepository, wire.Bind(new(postgres2.UserRepository), new(*postgres.UserRepository)), postgres.NewTeamRepository, wire.Bind(new(postgres2.TeamRepository), new(*postgres.TeamRepository)))
 
-var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)), service.NewAuthService, wire.Bind(new(usecase.AuthService), new(*service.AuthService)), service.NewEmailService, wire.Bind(new(usecase.EmailService), new(*service.EmailService)), service.NewTeamService, wire.Bind(new(usecase.TeamService), new(*service.TeamService)))
+var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)), service.NewAuthService, wire.Bind(new(usecase.AuthService), new(*service.AuthService)), service.NewTeamService, wire.Bind(new(usecase.TeamService), new(*service.TeamService)))
 
 var GeneralControllerProviderSet = wire.NewSet(controller.NewAuthController, wire.Struct(new(GeneralControllers), "*"))
 
@@ -132,17 +130,6 @@ func ProvidePagination(container *bootstrap.Config) *bootstrap.Pagination {
 	return &container.Env.Pagination
 }
 
-func ProvideEmailConfig() *service.EmailConfig {
-
-	return &service.EmailConfig{
-		SMTPServer:     "",
-		SMTPPort:       "587",
-		SenderEmail:    "",
-		SenderPassword: "",
-		SenderName:     "ELMOCPC",
-	}
-}
-
 var ProviderSet = wire.NewSet(
 	DatabaseProviderSet,
 	RepositoryProviderSet,
@@ -161,7 +148,6 @@ var ProviderSet = wire.NewSet(
 	ProvideJWTKeysPath,
 	ProvideSuperAdminCredentials,
 	ProvidePagination,
-	ProvideEmailConfig,
 	SeedProviderSet,
 )
 

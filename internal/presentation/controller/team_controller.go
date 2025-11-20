@@ -7,6 +7,8 @@ import (
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
 	"github.com/ELMOCPC/Backend/internal/domain/entity"
 	"github.com/ELMOCPC/Backend/internal/domain/exception"
+	repositoryPostgres "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
+	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 	"github.com/gin-gonic/gin"
 )
 
@@ -52,12 +54,16 @@ type InvitationResponse struct {
 }
 
 type TeamController struct {
-	teamService usecase.TeamService
+	teamService    usecase.TeamService
+	userRepository repositoryPostgres.UserRepository
+	db             database.Database
 }
 
-func NewTeamController(teamService usecase.TeamService) *TeamController {
+func NewTeamController(teamService usecase.TeamService, userRepository repositoryPostgres.UserRepository, db database.Database) *TeamController {
 	return &TeamController{
-		teamService: teamService,
+		teamService:    teamService,
+		userRepository: userRepository,
+		db:             db,
 	}
 }
 
@@ -134,6 +140,25 @@ func (tc *TeamController) UpdateTeam(ctx *gin.Context) {
 	Response(ctx, http.StatusOK, "team updated successfully", response)
 }
 
+// DeleteTeam - DELETE /teams/:id
+func (tc *TeamController) DeleteTeam(ctx *gin.Context) {
+	userID := ctx.GetUint("ID")
+
+	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
+		return
+	}
+
+	err = tc.teamService.DeleteTeam(uint(teamID), userID)
+	if err != nil {
+		// Let recovery middleware handle all error types and formatting
+		panic(err)
+	}
+
+	Response(ctx, http.StatusOK, "team deleted successfully", nil)
+}
+
 // InviteUser - POST /teams/:id/invitations
 func (tc *TeamController) InviteUser(ctx *gin.Context) {
 	req := Validated[InviteUserRequest](ctx)
@@ -200,9 +225,18 @@ func (tc *TeamController) RejectInvitation(ctx *gin.Context) {
 
 // GetUserInvitations - GET /invitations
 func (tc *TeamController) GetUserInvitations(ctx *gin.Context) {
-	// Get user to fetch email
-	// This is a simplified approach - in practice you'd pass the email from the service or context
-	invitations, err := tc.teamService.GetUserInvitations("")
+	userID := ctx.GetUint("ID")
+
+	// Get user to fetch their email
+	user, err := tc.userRepository.FindUserByID(tc.db, userID)
+	if err != nil {
+		panic(err)
+	}
+	if user == nil {
+		panic(exception.NotFoundError{Item: "user"})
+	}
+
+	invitations, err := tc.teamService.GetUserInvitations(user.Email)
 	if err != nil {
 		panic(err)
 	}

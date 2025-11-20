@@ -12,20 +12,17 @@ type TeamService struct {
 	teamRepository repository.TeamRepository
 	userRepository repository.UserRepository
 	db             database.Database
-	emailService   usecase.EmailService
 }
 
 func NewTeamService(
 	teamRepository repository.TeamRepository,
 	userRepository repository.UserRepository,
 	db database.Database,
-	emailService usecase.EmailService,
 ) *TeamService {
 	return &TeamService{
 		teamRepository: teamRepository,
 		userRepository: userRepository,
 		db:             db,
-		emailService:   emailService,
 	}
 }
 
@@ -120,6 +117,43 @@ func (ts *TeamService) UpdateTeam(teamID, userID uint, name, description string)
 	return team, nil
 }
 
+// DeleteTeam deletes a team (only creator can delete, and only if in draft status)
+func (ts *TeamService) DeleteTeam(teamID, userID uint) error {
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return err
+	}
+	if team == nil {
+		return exception.NotFoundError{Item: "team"}
+	}
+
+	// Check if user is the creator
+	if team.CreatorID != userID {
+		return exception.ForbiddenError{Resource: "team", Message: "only team creator can delete team"}
+	}
+
+	// Check if team is still in draft status
+	if team.Status != entity.TeamStatusDraft {
+		return exception.ForbiddenError{Resource: "team", Message: "cannot delete a submitted team"}
+	}
+
+	// Delete the team
+	if err := ts.teamRepository.DeleteTeam(ts.db, teamID); err != nil {
+		return err
+	}
+
+	// Remove team reference from all members
+	members, err := ts.teamRepository.GetTeamMembers(ts.db, teamID)
+	if err == nil {
+		for _, member := range members {
+			member.TeamID = nil
+			_ = ts.userRepository.UpdateUser(ts.db, member)
+		}
+	}
+
+	return nil
+}
+
 // InviteUserByEmail invites a user to the team by email
 func (ts *TeamService) InviteUserByEmail(teamID, inviterID uint, email string) (*entity.TeamInvitation, error) {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
@@ -193,22 +227,6 @@ func (ts *TeamService) InviteUserByEmail(teamID, inviterID uint, email string) (
 
 	if err := ts.teamRepository.CreateInvitation(ts.db, invitation); err != nil {
 		return nil, err
-	}
-
-	// Send invitation email
-	if ts.emailService != nil {
-		inviter, err := ts.userRepository.FindUserByID(ts.db, inviterID)
-		if err == nil && inviter != nil {
-			// Extract first name from email if user not found
-			invitationLink := "https://elmocpc.com/accept-invitation/" // This should be configurable
-			_ = ts.emailService.SendTeamInvitation(
-				email,
-				email, // Using email as name since we don't have the invitee info yet
-				team.Name,
-				inviter.FirstName+" "+inviter.LastName,
-				invitationLink,
-			)
-		}
 	}
 
 	return invitation, nil
@@ -472,21 +490,6 @@ func (ts *TeamService) SubmitTeam(teamID, userID uint) (*entity.Team, error) {
 	team.Status = entity.TeamStatusSubmitted
 	if err := ts.teamRepository.UpdateTeam(ts.db, team); err != nil {
 		return nil, err
-	}
-
-	// Send submission notification emails to all team members
-	if ts.emailService != nil {
-		members, err := ts.teamRepository.GetTeamMembers(ts.db, teamID)
-		if err == nil {
-			for _, member := range members {
-				// Send notification that team has been submitted and is awaiting validation
-				_ = ts.emailService.SendTeamValidationNotification(
-					member.Email,
-					member.FirstName+" "+member.LastName,
-					team.Name,
-				)
-			}
-		}
 	}
 
 	return team, nil
