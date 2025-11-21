@@ -15,6 +15,15 @@ type Env struct {
 	OTP        OTP
 	SuperAdmin SuperAdmin
 	S3         S3
+	SMTP       SMTP
+}
+
+type SMTP struct {
+	Server   string
+	Port     string
+	Email    string
+	Password string
+	SenderName string
 }
 
 type Server struct {
@@ -113,6 +122,13 @@ func NewEnv() *Env {
 			SecretKey: os.Getenv("S3_SECRET_KEY"),
 			Endpoint:  os.Getenv("S3_ENDPOINT"),
 			Buckets:   BucketName{},
+		},
+		SMTP: SMTP{
+			Server:     os.Getenv("SMTP_SERVER"),
+			Port:       os.Getenv("SMTP_PORT"),
+			Email:      os.Getenv("SMTP_EMAIL"),
+			Password:   os.Getenv("SMTP_PASSWORD"),
+			SenderName: os.Getenv("SMTP_SENDER_NAME"),
 		},
 	}
 }

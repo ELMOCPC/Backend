@@ -6,11 +6,10 @@ import (
 )
 
 func SetupAdminRoutes(routerGroup *gin.RouterGroup, app *wire.Application) {
-	// Add your admin routes here
-	// Example:
-	// users := routerGroup.Group("/users")
-	// {
-	//     users.GET("", app.Controllers.Admin.UserController.GetUsers)
-	//     users.POST("", app.Controllers.Admin.UserController.CreateUser)
-	// }
+	// Payment receipt routes
+	receipts := routerGroup.Group("/receipts")
+	{
+		receipts.GET("/pending", app.Controllers.Customer.TeamController.GetPendingReceipts)
+		receipts.POST("/:id/verify", app.Controllers.Customer.TeamController.VerifyPaymentReceipt)
+	}
 }

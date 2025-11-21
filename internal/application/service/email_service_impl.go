@@ -8,11 +8,11 @@ import (
 )
 
 type EmailConfig struct {
-	SMTPServer string
-	SMTPPort   string
-	SenderEmail string
+	SMTPServer     string
+	SMTPPort       string
+	SenderEmail    string
 	SenderPassword string
-	SenderName string
+	SenderName     string
 }
 
 type EmailService struct {
@@ -25,7 +25,6 @@ func NewEmailService(config *EmailConfig) *EmailService {
 	}
 }
 
-// SendTeamInvitation sends an email inviting a user to join a team
 func (es *EmailService) SendTeamInvitation(toEmail, toName, teamName, inviterName string, invitationLink string) error {
 	subject := fmt.Sprintf("You're invited to join team: %s", teamName)
 	body := fmt.Sprintf(`
@@ -45,7 +44,6 @@ ELMOCPC Team
 	return es.sendEmail(toEmail, subject, body)
 }
 
-// SendTeamValidationNotification sends an email notifying team members that their team was validated
 func (es *EmailService) SendTeamValidationNotification(toEmail, toName, teamName string) error {
 	subject := fmt.Sprintf("Team '%s' has been validated", teamName)
 	body := fmt.Sprintf(`
@@ -62,7 +60,6 @@ ELMOCPC Team
 	return es.sendEmail(toEmail, subject, body)
 }
 
-// SendTeamRejectionNotification sends an email notifying team members that their team was rejected
 func (es *EmailService) SendTeamRejectionNotification(toEmail, toName, teamName, rejectionReason string) error {
 	subject := fmt.Sprintf("Team '%s' validation unsuccessful", teamName)
 	body := fmt.Sprintf(`
@@ -82,17 +79,7 @@ ELMOCPC Team
 	return es.sendEmail(toEmail, subject, body)
 }
 
-// sendEmail is a helper method to send emails via SMTP
-func (es *EmailService) sendEmail(to, subject, body string) error {
-	// Note: This is a basic implementation. For production, you might want to use
-	// a package like github.com/go-mail/mail or integrate with a service like SendGrid
-
-	if es.config.SMTPServer == "" {
-		// If SMTP is not configured, log the email instead
-		fmt.Printf("Email would be sent to: %s\nSubject: %s\nBody: %s\n", to, subject, body)
-		return nil
-	}
-
+func (es *EmailService) SendEmail(to, subject, body string) error {
 	message := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", to, subject, body)
 
 	auth := smtp.PlainAuth("", es.config.SenderEmail, es.config.SenderPassword, es.config.SMTPServer)
@@ -107,5 +94,8 @@ func (es *EmailService) sendEmail(to, subject, body string) error {
 	return err
 }
 
-// Ensure EmailService implements the EmailService interface
+func (es *EmailService) sendEmail(to, subject, body string) error {
+	return es.SendEmail(to, subject, body)
+}
+
 var _ usecase.EmailService = (*EmailService)(nil)

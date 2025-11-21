@@ -5,89 +5,55 @@ import (
 
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
 	"github.com/ELMOCPC/Backend/internal/domain/exception"
+	"github.com/ELMOCPC/Backend/internal/presentation/dto"
 	"github.com/gin-gonic/gin"
 )
 
-type SignUpRequest struct {
-	FirstName string `json:"first_name" validate:"required"`
-	LastName  string `json:"last_name" validate:"required"`
-	Email     string `json:"email" validate:"required,email"`
-	Phone     string `json:"phone" validate:"required"`
-	Password  string `json:"password" validate:"required,min=8"`
-}
-
-type LoginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required"`
-}
-
-type AuthResponse struct {
-	ID           uint   `json:"id"`
-	FirstName    string `json:"first_name"`
-	LastName     string `json:"last_name"`
-	Email        string `json:"email"`
-	Phone        string `json:"phone"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-}
-
 type AuthController struct {
 	authService usecase.AuthService
+	otpService  usecase.OTPService
 }
 
-func NewAuthController(authService usecase.AuthService) *AuthController {
+func NewAuthController(authService usecase.AuthService, otpService usecase.OTPService) *AuthController {
 	return &AuthController{
 		authService: authService,
+		otpService:  otpService,
 	}
 }
 
-func (ac *AuthController) SignUp(ctx *gin.Context) {
-	req := Validated[SignUpRequest](ctx)
-
-	user, accessToken, refreshToken, err := ac.authService.SignUp(
-		req.FirstName,
-		req.LastName,
-		req.Email,
-		req.Phone,
-		req.Password,
-	)
-	if err != nil {
-		switch err.(type) {
-		case *exception.ConflictErrors:
-			Response(ctx, http.StatusConflict, "email or phone already exists", nil)
-		default:
-			panic(err)
-		}
-		return
-	}
-
-	response := &AuthResponse{
-		ID:           user.ID,
-		FirstName:    user.FirstName,
-		LastName:     user.LastName,
-		Email:        user.Email,
-		Phone:        user.Phone,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-	}
-
-	Response(ctx, http.StatusCreated, "user created successfully", response)
-}
 
 func (ac *AuthController) Login(ctx *gin.Context) {
-	req := Validated[LoginRequest](ctx)
+	req := Validated[dto.LoginRequest](ctx)
 
-	user, accessToken, refreshToken, err := ac.authService.Login(req.Email, req.Password)
-	if err != nil {
+	if err := ac.authService.Login(req.Email); err != nil {
 		if exception.IsAuthError(err) {
-			Response(ctx, http.StatusUnauthorized, "invalid email or password", nil)
+			Response(ctx, http.StatusUnauthorized, "user not found", nil)
 		} else {
 			panic(err)
 		}
 		return
 	}
 
-	response := &AuthResponse{
+	Response(ctx, http.StatusOK, "OTP sent to your email", nil)
+}
+
+func (ac *AuthController) VerifyLogin(ctx *gin.Context) {
+	req := Validated[dto.VerifyOTPRequest](ctx)
+
+	user, accessToken, refreshToken, err := ac.authService.VerifyLogin(req.Email, req.Code)
+	if err != nil {
+		switch err.(type) {
+		case exception.NotFoundError:
+			Response(ctx, http.StatusNotFound, "OTP not found or expired", nil)
+		case exception.ValidationErrors:
+			Response(ctx, http.StatusBadRequest, "invalid or expired OTP", nil)
+		default:
+			panic(err)
+		}
+		return
+	}
+
+	response := &dto.AuthResponse{
 		ID:           user.ID,
 		FirstName:    user.FirstName,
 		LastName:     user.LastName,
@@ -98,4 +64,57 @@ func (ac *AuthController) Login(ctx *gin.Context) {
 	}
 
 	Response(ctx, http.StatusOK, "login successful", response)
+}
+
+func (ac *AuthController) SignUp(ctx *gin.Context) {
+	req := Validated[dto.CompleteSignUpRequest](ctx)
+
+	if err := ac.authService.SignUp(
+		req.FirstName,
+		req.LastName,
+		req.Email,
+		req.Phone,
+		req.TshirtSize,
+		req.University,
+		req.StudentNumber,
+	); err != nil {
+		switch err.(type) {
+		case *exception.ConflictErrors:
+			Response(ctx, http.StatusConflict, "email or phone already exists", nil)
+		default:
+			panic(err)
+		}
+		return
+	}
+
+	Response(ctx, http.StatusOK, "OTP sent to your email", nil)
+}
+
+func (ac *AuthController) VerifySignUp(ctx *gin.Context) {
+	req := Validated[dto.VerifyOTPRequest](ctx)
+
+	user, accessToken, refreshToken, err := ac.authService.VerifySignUp(req.Email, req.Code)
+	if err != nil {
+		switch err.(type) {
+		case exception.NotFoundError:
+			Response(ctx, http.StatusNotFound, "OTP not found or expired", nil)
+		case exception.ValidationErrors:
+			Response(ctx, http.StatusBadRequest, "invalid or expired OTP", nil)
+		default:
+			panic(err)
+		}
+		return
+	}
+
+	response := &dto.AuthResponse{
+		ID:           user.ID,
+		FirstName:    user.FirstName,
+		LastName:     user.LastName,
+		Email:        user.Email,
+		Phone:        user.Phone,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}
+
+	Response(ctx, http.StatusCreated, "account created successfully", response)
 }

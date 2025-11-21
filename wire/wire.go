@@ -7,9 +7,11 @@ import (
 	"github.com/ELMOCPC/Backend/bootstrap"
 	"github.com/ELMOCPC/Backend/internal/application/service"
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
+	domainCache "github.com/ELMOCPC/Backend/internal/domain/repository/cache"
 	domainPostgre "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
 	domainS3 "github.com/ELMOCPC/Backend/internal/domain/storage/s3"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
+	infraCache "github.com/ELMOCPC/Backend/internal/infrastructure/cache"
 	infraJWT "github.com/ELMOCPC/Backend/internal/infrastructure/jwt"
 	infraLocalization "github.com/ELMOCPC/Backend/internal/infrastructure/localization"
 	infraPostgre "github.com/ELMOCPC/Backend/internal/infrastructure/repository/postgres"
@@ -28,20 +30,34 @@ var DatabaseProviderSet = wire.NewSet(
 	wire.Struct(new(Database), "*"),
 )
 
+var CacheProviderSet = wire.NewSet(
+	bootstrap.ProvideRedisClient,
+	infraCache.NewRedisCache,
+	wire.Bind(new(domainCache.CacheRepository), new(*infraCache.RedisCache)),
+)
+
 var RepositoryProviderSet = wire.NewSet(
 	infraPostgre.NewUserRepository,
 	wire.Bind(new(domainPostgre.UserRepository), new(*infraPostgre.UserRepository)),
 	infraPostgre.NewTeamRepository,
 	wire.Bind(new(domainPostgre.TeamRepository), new(*infraPostgre.TeamRepository)),
+	infraPostgre.NewOTPRepository,
+	infraPostgre.NewTeamInvitationTokenRepository,
+	infraPostgre.NewPaymentReceiptRepository,
 )
 
 var ServiceProviderSet = wire.NewSet(
 	service.NewJWTService,
 	wire.Bind(new(usecase.JwtService), new(*service.JWTService)),
+	service.NewEmailService,
+	wire.Bind(new(usecase.EmailService), new(*service.EmailService)),
+	service.NewOTPService,
 	service.NewAuthService,
 	wire.Bind(new(usecase.AuthService), new(*service.AuthService)),
 	service.NewTeamService,
 	wire.Bind(new(usecase.TeamService), new(*service.TeamService)),
+	service.NewTeamInvitationService,
+	service.NewPaymentReceiptService,
 )
 
 var GeneralControllerProviderSet = wire.NewSet(
@@ -114,8 +130,23 @@ func ProvidePagination(container *bootstrap.Config) *bootstrap.Pagination {
 	return &container.Env.Pagination
 }
 
+func ProvideSMTPConfig(container *bootstrap.Config) *service.EmailConfig {
+	return &service.EmailConfig{
+		SMTPServer:     container.Env.SMTP.Server,
+		SMTPPort:       container.Env.SMTP.Port,
+		SenderEmail:    container.Env.SMTP.Email,
+		SenderPassword: container.Env.SMTP.Password,
+		SenderName:     container.Env.SMTP.SenderName,
+	}
+}
+
+func ProvideEnv(container *bootstrap.Config) *bootstrap.Env {
+	return container.Env
+}
+
 var ProviderSet = wire.NewSet(
 	DatabaseProviderSet,
+	CacheProviderSet,
 	RepositoryProviderSet,
 	ServiceProviderSet,
 	MiddlewareProviderSet,
@@ -124,6 +155,7 @@ var ProviderSet = wire.NewSet(
 	CustomerControllerProviderSet,
 	ControllerProviderSet,
 	AdapterProviderSet,
+	ProvideEnv,
 	ProvideDBConfig,
 	ProvideConstants,
 	ProvideRDBConfig,
@@ -132,6 +164,7 @@ var ProviderSet = wire.NewSet(
 	ProvideJWTKeysPath,
 	ProvideSuperAdminCredentials,
 	ProvidePagination,
+	ProvideSMTPConfig,
 	SeedProviderSet,
 )
 
