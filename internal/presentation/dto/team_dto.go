@@ -42,7 +42,19 @@ type VerifyReceiptRequest struct {
 	Notes    string `json:"notes"`
 }
 
+type RejectTeamRequest struct {
+	RejectionReason string `json:"rejection_reason" validate:"required"`
+}
+
 // Response DTOs
+
+type PendingInvitationResponse struct {
+	ID        uint   `json:"id"`
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	ExpiresAt string `json:"expires_at"`
+}
 type TeamResponse struct {
 	ID          uint            `json:"id"`
 	Name        string          `json:"name"`

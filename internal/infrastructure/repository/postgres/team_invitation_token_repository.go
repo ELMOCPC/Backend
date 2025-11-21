@@ -20,6 +20,18 @@ func (repo *TeamInvitationTokenRepositoryImpl) CreateToken(db database.Database,
 	return result.Error
 }
 
+func (repo *TeamInvitationTokenRepositoryImpl) FindTokenByID(db database.Database, id uint) (*entity.TeamInvitationToken, error) {
+	var token entity.TeamInvitationToken
+	result := db.GetDB().First(&token, id)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, result.Error
+	}
+	return &token, nil
+}
+
 func (repo *TeamInvitationTokenRepositoryImpl) FindTokenByToken(db database.Database, tokenStr string) (*entity.TeamInvitationToken, error) {
 	var token entity.TeamInvitationToken
 	result := db.GetDB().

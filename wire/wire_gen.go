@@ -65,12 +65,12 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 	}
 	adminControllers := &AdminControllers{}
 	teamRepository := postgres.NewTeamRepository()
-	teamService := service.NewTeamService(teamRepository, userRepository, postgresDatabase)
 	teamInvitationTokenRepository := postgres.NewTeamInvitationTokenRepository()
+	teamService := service.NewTeamService(teamRepository, userRepository, teamInvitationTokenRepository, postgresDatabase)
 	teamInvitationService := service.NewTeamInvitationService(teamInvitationTokenRepository, teamRepository, userRepository, emailService, jwtService, postgresDatabase, env)
 	paymentReceiptRepository := postgres.NewPaymentReceiptRepository()
 	paymentReceiptService := service.NewPaymentReceiptService(paymentReceiptRepository, teamRepository, userRepository, emailService, postgresDatabase)
-	teamController := controller.NewTeamController(teamService, teamInvitationService, paymentReceiptService, userRepository, postgresDatabase)
+	teamController := controller.NewTeamController(teamService, teamInvitationService, paymentReceiptService, emailService, userRepository, postgresDatabase)
 	customerControllers := &CustomerControllers{
 		TeamController: teamController,
 	}

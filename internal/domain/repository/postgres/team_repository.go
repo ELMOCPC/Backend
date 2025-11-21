@@ -32,4 +32,5 @@ type TeamRepository interface {
 
 	// Find teams with filters
 	FindTeams(db database.Database, options *QueryOptions) ([]*entity.Team, int64, error)
+	FindTeamsByStatus(db database.Database, status entity.TeamStatus) ([]*entity.Team, error)
 }

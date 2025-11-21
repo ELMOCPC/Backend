@@ -18,11 +18,18 @@ type TeamService interface {
 	LeaveTeam(teamID, userID uint) error
 	GetTeamMembers(teamID uint) ([]*entity.User, error)
 
-	// Team invitations
+	// Team invitations and submission
 	SubmitTeam(teamID, userID uint) (*entity.Team, error)
 	GetUserInvitations(email string) ([]*entity.TeamInvitation, error)
+	GetPendingInvitationTokens(teamID, userID uint) ([]*entity.TeamInvitationToken, error)
 	CancelInvitation(invitationID, userID uint) error
+	CancelInvitationToken(tokenID, userID uint) error
 
-	// Team validation (admin operations handled separately)
+	// Team validation (admin operations)
+	ValidateTeam(teamID uint) (*entity.Team, error)
+	RejectTeam(teamID uint, rejectionReason string) (*entity.Team, error)
+	GetPendingTeams() ([]*entity.Team, error)
+	GetAllTeams() ([]*entity.Team, error)
+	GetTeamsByStatus(status entity.TeamStatus) ([]*entity.Team, error)
 	CanModifyTeam(teamID, userID uint) (bool, error)
 }

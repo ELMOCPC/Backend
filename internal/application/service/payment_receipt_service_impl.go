@@ -44,8 +44,8 @@ func (prs *PaymentReceiptServiceImpl) UploadReceipt(teamID, userID uint, receipt
 		return nil, exception.NotFoundError{Item: "team"}
 	}
 
-	// Verify team status is submitted or waiting_for_payment
-	if team.Status != entity.TeamStatusSubmitted && team.Status != entity.TeamStatusWaitingPayment {
+	// Verify team status is waiting_for_payment
+	if team.Status != entity.TeamStatusWaitingPayment {
 		validationErr := exception.ValidationErrors{}
 		validationErr.Add("team", "invalid_status_for_payment")
 		return nil, validationErr
@@ -72,8 +72,8 @@ func (prs *PaymentReceiptServiceImpl) UploadReceipt(teamID, userID uint, receipt
 		return nil, err
 	}
 
-	// Update team status to waiting_for_payment
-	team.Status = entity.TeamStatusWaitingPayment
+	// Update team status to receipt_pending
+	team.Status = entity.TeamStatusReceiptPending
 	if err := prs.teamRepository.UpdateTeam(prs.db, team); err != nil {
 		return nil, err
 	}
@@ -134,9 +134,9 @@ func (prs *PaymentReceiptServiceImpl) VerifyReceipt(receiptID uint, adminID uint
 	// Update team status based on approval
 	team := receipt.Team
 	if approved {
-		team.Status = entity.TeamStatusVerified
+		team.Status = entity.TeamStatusAccepted
 	} else {
-		team.Status = entity.TeamStatusSubmitted
+		team.Status = entity.TeamStatusWaitingPayment
 	}
 
 	if err := prs.teamRepository.UpdateTeam(prs.db, team); err != nil {
@@ -145,35 +145,25 @@ func (prs *PaymentReceiptServiceImpl) VerifyReceipt(receiptID uint, adminID uint
 
 	// Notify team members
 	members := team.Members
-	admin, err := prs.userRepository.FindUserByID(prs.db, adminID)
-	if err != nil {
-		return nil, err
-	}
-
-	statusMsg := "accepted"
-	if !approved {
-		statusMsg = "rejected"
-	}
 
 	for _, member := range members {
-		subject := "Payment Receipt " + statusMsg + " - Team " + team.Name
-		body := "Dear " + member.FirstName + ",\n\n"
-
 		if approved {
-			body += "Great news! Your team's payment receipt has been verified and approved.\n\n" +
-				"Your team is now verified and ready to participate in ELMOCPC.\n\n"
+			// Send receipt approved notification
+			_ = prs.emailService.SendReceiptApprovedNotification(member.Email, member.FirstName, team.Name)
 		} else {
-			body += "Your team's payment receipt has been rejected.\n\n" +
-				"Please submit a new receipt for verification.\n\n"
+			// Send receipt rejected notification
+			subject := "Payment Receipt Rejected - Team " + team.Name
+			body := "Dear " + member.FirstName + ",\n\n" +
+				"Your team's payment receipt has been rejected and needs to be resubmitted.\n\n"
 			if notes != "" {
 				body += "Admin notes: " + notes + "\n\n"
 			}
+			body += "Please submit a new receipt for verification.\n\n" +
+				"Best regards,\n" +
+				"ELMOCPC Team"
+
+			_ = prs.emailService.SendEmail(member.Email, subject, body)
 		}
-
-		body += "Best regards,\n" +
-			"ELMOCPC Team (Verified by " + admin.FirstName + " " + admin.LastName + ")"
-
-		_ = prs.emailService.SendEmail(member.Email, subject, body)
 	}
 
 	return receipt, nil

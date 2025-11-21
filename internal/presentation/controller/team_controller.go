@@ -18,6 +18,7 @@ type TeamController struct {
 	teamService           usecase.TeamService
 	teamInvitationService usecase.TeamInvitationService
 	paymentReceiptService usecase.PaymentReceiptService
+	emailService          usecase.EmailService
 	userRepository        repositoryPostgres.UserRepository
 	db                    database.Database
 }
@@ -26,6 +27,7 @@ func NewTeamController(
 	teamService usecase.TeamService,
 	teamInvitationService usecase.TeamInvitationService,
 	paymentReceiptService usecase.PaymentReceiptService,
+	emailService usecase.EmailService,
 	userRepository repositoryPostgres.UserRepository,
 	db database.Database,
 ) *TeamController {
@@ -33,6 +35,7 @@ func NewTeamController(
 		teamService:           teamService,
 		teamInvitationService: teamInvitationService,
 		paymentReceiptService: paymentReceiptService,
+		emailService:          emailService,
 		userRepository:        userRepository,
 		db:                    db,
 	}
@@ -143,6 +146,69 @@ func (tc *TeamController) RemoveMember(ctx *gin.Context) {
 	}
 
 	Response(ctx, http.StatusOK, "member removed successfully", nil)
+}
+
+func (tc *TeamController) SubmitTeam(ctx *gin.Context) {
+	userID := ctx.GetUint("ID")
+
+	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
+		return
+	}
+
+	team, err := tc.teamService.SubmitTeam(uint(teamID), userID)
+	if err != nil {
+		panic(err)
+	}
+
+	response := tc.mapTeamResponse(team)
+	Response(ctx, http.StatusOK, "team submitted successfully", response)
+}
+
+func (tc *TeamController) GetPendingTeamInvitations(ctx *gin.Context) {
+	userID := ctx.GetUint("ID")
+
+	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
+		return
+	}
+
+	tokens, err := tc.teamService.GetPendingInvitationTokens(uint(teamID), userID)
+	if err != nil {
+		panic(err)
+	}
+
+	var responses []*dto.PendingInvitationResponse
+	for _, token := range tokens {
+		responses = append(responses, &dto.PendingInvitationResponse{
+			ID:        token.ID,
+			Email:     token.Email,
+			FirstName: token.FirstName,
+			LastName:  token.LastName,
+			ExpiresAt: token.ExpiresAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	Response(ctx, http.StatusOK, "pending invitations retrieved successfully", responses)
+}
+
+func (tc *TeamController) CancelTeamInvitation(ctx *gin.Context) {
+	userID := ctx.GetUint("ID")
+
+	tokenID, err := strconv.ParseUint(ctx.Param("tokenId"), 10, 32)
+	if err != nil {
+		Response(ctx, http.StatusBadRequest, "invalid token id", nil)
+		return
+	}
+
+	err = tc.teamService.CancelInvitationToken(uint(tokenID), userID)
+	if err != nil {
+		panic(err)
+	}
+
+	Response(ctx, http.StatusOK, "invitation cancelled successfully", nil)
 }
 
 func (tc *TeamController) LeaveTeam(ctx *gin.Context) {
@@ -393,6 +459,108 @@ func (tc *TeamController) GetPendingReceipts(ctx *gin.Context) {
 	}
 
 	Response(ctx, http.StatusOK, "pending receipts retrieved successfully", responses)
+}
+
+func (tc *TeamController) GetPendingTeams(ctx *gin.Context) {
+	teams, err := tc.teamService.GetPendingTeams()
+	if err != nil {
+		panic(err)
+	}
+
+	var responses []*dto.TeamResponse
+	for _, team := range teams {
+		responses = append(responses, tc.mapTeamResponse(team))
+	}
+
+	Response(ctx, http.StatusOK, "pending teams retrieved successfully", responses)
+}
+
+func (tc *TeamController) ValidateTeam(ctx *gin.Context) {
+	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
+		return
+	}
+
+	team, err := tc.teamService.ValidateTeam(uint(teamID))
+	if err != nil {
+		panic(err)
+	}
+
+	// Send email to all team members
+	for _, member := range team.Members {
+		_ = tc.emailService.SendTeamApprovedNotification(member.Email, member.FirstName, team.Name)
+	}
+
+	response := tc.mapTeamResponse(team)
+	Response(ctx, http.StatusOK, "team validated successfully", response)
+}
+
+func (tc *TeamController) RejectTeam(ctx *gin.Context) {
+	req := Validated[dto.RejectTeamRequest](ctx)
+	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
+		return
+	}
+
+	team, err := tc.teamService.RejectTeam(uint(teamID), req.RejectionReason)
+	if err != nil {
+		panic(err)
+	}
+
+	// Send email to all team members
+	for _, member := range team.Members {
+		_ = tc.emailService.SendTeamRejectionNotification(member.Email, member.FirstName, team.Name, req.RejectionReason)
+	}
+
+	response := tc.mapTeamResponse(team)
+	Response(ctx, http.StatusOK, "team rejected successfully", response)
+}
+
+func (tc *TeamController) GetAllTeams(ctx *gin.Context) {
+	status := ctx.Query("status")
+
+	var teams []*entity.Team
+	var err error
+
+	if status != "" {
+		// Filter by status if provided
+		teams, err = tc.teamService.GetTeamsByStatus(entity.TeamStatus(status))
+	} else {
+		// Get all teams
+		teams, err = tc.teamService.GetAllTeams()
+	}
+
+	if err != nil {
+		panic(err)
+	}
+
+	var responses []*dto.TeamResponse
+	for _, team := range teams {
+		responses = append(responses, tc.mapTeamResponse(team))
+	}
+
+	Response(ctx, http.StatusOK, "teams retrieved successfully", responses)
+}
+
+func (tc *TeamController) GetTeamByIDAdmin(ctx *gin.Context) {
+	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
+		return
+	}
+
+	team, err := tc.teamService.GetTeamByID(uint(teamID))
+	if err != nil {
+		panic(err)
+	}
+	if team == nil {
+		panic(exception.NotFoundError{Item: "team"})
+	}
+
+	response := tc.mapTeamResponse(team)
+	Response(ctx, http.StatusOK, "team retrieved successfully", response)
 }
 
 func (tc *TeamController) GetTeamReceipt(ctx *gin.Context) {

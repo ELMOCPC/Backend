@@ -101,6 +101,36 @@ ELMOCPC Team
 	return es.sendEmail(toEmail, subject, body)
 }
 
+func (es *EmailService) SendTeamApprovedNotification(toEmail, toName, teamName string) error {
+	subject := fmt.Sprintf("Team '%s' approved - Please upload payment receipt", teamName)
+	body := fmt.Sprintf(`
+Dear %s,
+
+Great news! Your team "%s" has been approved by our admins.
+
+Next Step: Please upload your payment receipt for verification. Once your receipt is validated, your team will be officially accepted to the contest.
+
+Best regards,
+ELMOCPC Team
+`, toName, teamName)
+	return es.sendEmail(toEmail, subject, body)
+}
+
+func (es *EmailService) SendReceiptApprovedNotification(toEmail, toName, teamName string) error {
+	subject := fmt.Sprintf("Congratulations! Team '%s' officially accepted", teamName)
+	body := fmt.Sprintf(`
+Dear %s,
+
+Congratulations! Your team "%s" has been officially accepted to ELMOCPC.
+
+Your payment receipt has been validated and approved. Your team is now ready to participate in all contest activities.
+
+Best regards,
+ELMOCPC Team
+`, toName, teamName)
+	return es.sendEmail(toEmail, subject, body)
+}
+
 func (es *EmailService) SendEmail(to, subject, body string) error {
 	from := fmt.Sprintf("%s <%s>", es.config.SenderName, es.config.SenderEmail)
 	message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s",

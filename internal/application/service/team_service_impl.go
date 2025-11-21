@@ -9,20 +9,23 @@ import (
 )
 
 type TeamService struct {
-	teamRepository repository.TeamRepository
-	userRepository repository.UserRepository
-	db             database.Database
+	teamRepository           repository.TeamRepository
+	userRepository           repository.UserRepository
+	teamInvitationTokenRepo  repository.TeamInvitationTokenRepository
+	db                       database.Database
 }
 
 func NewTeamService(
 	teamRepository repository.TeamRepository,
 	userRepository repository.UserRepository,
+	teamInvitationTokenRepo repository.TeamInvitationTokenRepository,
 	db database.Database,
 ) *TeamService {
 	return &TeamService{
-		teamRepository: teamRepository,
-		userRepository: userRepository,
-		db:             db,
+		teamRepository:          teamRepository,
+		userRepository:          userRepository,
+		teamInvitationTokenRepo: teamInvitationTokenRepo,
+		db:                      db,
 	}
 }
 
@@ -486,6 +489,40 @@ func (ts *TeamService) SubmitTeam(teamID, userID uint) (*entity.Team, error) {
 		return nil, conflictErr
 	}
 
+	// Check if team has pending invitations (new token-based invitations)
+	pendingTokens, err := ts.teamInvitationTokenRepo.FindTokensByTeamID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Count pending tokens (not accepted and not rejected)
+	pendingCount := 0
+	for _, token := range pendingTokens {
+		if !token.Accepted && !token.Rejected {
+			pendingCount++
+		}
+	}
+
+	if pendingCount > 0 {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("team", "pending_invitations")
+		return nil, conflictErr
+	}
+
+	// Check if team has pending invitations (legacy invitations)
+	invitations, err := ts.teamRepository.FindInvitationsByTeamID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, invitation := range invitations {
+		if invitation.Status == entity.InvitationStatusPending {
+			conflictErr := exception.ConflictErrors{}
+			conflictErr.Add("team", "pending_invitations")
+			return nil, conflictErr
+		}
+	}
+
 	// Update team status
 	team.Status = entity.TeamStatusSubmitted
 	if err := ts.teamRepository.UpdateTeam(ts.db, team); err != nil {
@@ -498,6 +535,38 @@ func (ts *TeamService) SubmitTeam(teamID, userID uint) (*entity.Team, error) {
 // GetUserInvitations retrieves all invitations for a user's email
 func (ts *TeamService) GetUserInvitations(email string) ([]*entity.TeamInvitation, error) {
 	return ts.teamRepository.FindInvitationsByEmail(ts.db, email)
+}
+
+// GetPendingInvitationTokens retrieves all pending invitation tokens for a team
+func (ts *TeamService) GetPendingInvitationTokens(teamID, userID uint) ([]*entity.TeamInvitationToken, error) {
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if team == nil {
+		return nil, exception.NotFoundError{Item: "team"}
+	}
+
+	// Check if user is the creator
+	if team.CreatorID != userID {
+		return nil, exception.ForbiddenError{Resource: "team", Message: "only team creator can view pending invitations"}
+	}
+
+	// Get all tokens for the team
+	tokens, err := ts.teamInvitationTokenRepo.FindTokensByTeamID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter for pending tokens (not accepted and not rejected)
+	var pendingTokens []*entity.TeamInvitationToken
+	for _, token := range tokens {
+		if !token.Accepted && !token.Rejected {
+			pendingTokens = append(pendingTokens, token)
+		}
+	}
+
+	return pendingTokens, nil
 }
 
 // CancelInvitation cancels a pending invitation (only team creator can cancel)
@@ -539,6 +608,46 @@ func (ts *TeamService) CancelInvitation(invitationID, userID uint) error {
 	return nil
 }
 
+// CancelInvitationToken cancels a pending invitation token (only team creator can cancel)
+func (ts *TeamService) CancelInvitationToken(tokenID, userID uint) error {
+	// Find the token by ID
+	token, err := ts.teamInvitationTokenRepo.FindTokenByID(ts.db, tokenID)
+	if err != nil {
+		return err
+	}
+	if token == nil {
+		return exception.NotFoundError{Item: "invitation_token"}
+	}
+
+	// Get team to check if user is creator
+	team, err := ts.teamRepository.FindTeamByID(ts.db, token.TeamID)
+	if err != nil {
+		return err
+	}
+	if team == nil {
+		return exception.NotFoundError{Item: "team"}
+	}
+
+	// Check if user is the team creator
+	if team.CreatorID != userID {
+		return exception.ForbiddenError{Resource: "invitation_token", Message: "only team creator can cancel invitations"}
+	}
+
+	// Check if token is still pending (not accepted and not rejected)
+	if token.Accepted || token.Rejected {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("invitation_token", "invalid_status")
+		return conflictErr
+	}
+
+	// Delete the token
+	if err := ts.teamInvitationTokenRepo.DeleteToken(ts.db, tokenID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // CanModifyTeam checks if a user can modify a team
 func (ts *TeamService) CanModifyTeam(teamID, userID uint) (bool, error) {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
@@ -560,6 +669,75 @@ func (ts *TeamService) CanModifyTeam(teamID, userID uint) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// ValidateTeam approves a submitted team (admin operation)
+func (ts *TeamService) ValidateTeam(teamID uint) (*entity.Team, error) {
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if team == nil {
+		return nil, exception.NotFoundError{Item: "team"}
+	}
+
+	// Check if team is in submitted status
+	if team.Status != entity.TeamStatusSubmitted {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("team", "invalid_status_for_validation")
+		return nil, conflictErr
+	}
+
+	// Update team status to waiting_for_payment
+	team.Status = entity.TeamStatusWaitingPayment
+	if err := ts.teamRepository.UpdateTeam(ts.db, team); err != nil {
+		return nil, err
+	}
+
+	return team, nil
+}
+
+// RejectTeam rejects a submitted team (admin operation)
+func (ts *TeamService) RejectTeam(teamID uint, rejectionReason string) (*entity.Team, error) {
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if team == nil {
+		return nil, exception.NotFoundError{Item: "team"}
+	}
+
+	// Check if team is in submitted status
+	if team.Status != entity.TeamStatusSubmitted {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("team", "invalid_status_for_rejection")
+		return nil, conflictErr
+	}
+
+	// Update team status to rejected
+	team.Status = entity.TeamStatusRejected
+	if err := ts.teamRepository.UpdateTeam(ts.db, team); err != nil {
+		return nil, err
+	}
+
+	return team, nil
+}
+
+// GetPendingTeams retrieves all teams pending admin validation
+func (ts *TeamService) GetPendingTeams() ([]*entity.Team, error) {
+	return ts.teamRepository.FindTeamsByStatus(ts.db, entity.TeamStatusSubmitted)
+}
+
+// GetAllTeams retrieves all teams (admin operation)
+func (ts *TeamService) GetAllTeams() ([]*entity.Team, error) {
+	// Use FindTeams with nil options to get all teams
+	teams, _, err := ts.teamRepository.FindTeams(ts.db, nil)
+	return teams, err
+}
+
+// GetTeamsByStatus retrieves teams by specific status (admin operation)
+func (ts *TeamService) GetTeamsByStatus(status entity.TeamStatus) ([]*entity.Team, error) {
+	return ts.teamRepository.FindTeamsByStatus(ts.db, status)
 }
 
 // Ensure TeamService implements the TeamService interface
