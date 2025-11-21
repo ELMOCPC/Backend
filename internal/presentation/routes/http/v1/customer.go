@@ -15,6 +15,7 @@ func SetupCustomerRoutes(routerGroup *gin.RouterGroup, app *wire.Application) {
 		teams.PUT("/:id", app.Controllers.Customer.TeamController.UpdateTeam)
 		teams.DELETE("/:id", app.Controllers.Customer.TeamController.DeleteTeam)
 		teams.GET("/:id/members", app.Controllers.Customer.TeamController.GetTeamMembers)
+
 		teams.GET("/:id/receipt", app.Controllers.Customer.TeamController.GetTeamReceipt)
 		teams.POST("/:id/invitations", app.Controllers.Customer.TeamController.InviteMembers)
 		teams.POST("/:id/upload-receipt", app.Controllers.Customer.TeamController.UploadPaymentReceipt)

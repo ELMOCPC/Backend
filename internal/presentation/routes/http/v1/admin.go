@@ -6,7 +6,6 @@ import (
 )
 
 func SetupAdminRoutes(routerGroup *gin.RouterGroup, app *wire.Application) {
-	// Payment receipt routes
 	receipts := routerGroup.Group("/receipts")
 	{
 		receipts.GET("/pending", app.Controllers.Customer.TeamController.GetPendingReceipts)

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"net/smtp"
 
@@ -17,6 +18,30 @@ type EmailConfig struct {
 
 type EmailService struct {
 	config *EmailConfig
+}
+
+// LoginAuth implements smtp.Auth for LOGIN authentication
+type LoginAuth struct {
+	username string
+	password string
+}
+
+func (a *LoginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", []byte{}, nil
+}
+
+func (a *LoginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		switch string(fromServer) {
+		case "Username:":
+			return []byte(a.username), nil
+		case "Password:":
+			return []byte(a.password), nil
+		default:
+			return nil, errors.New("unknown from server")
+		}
+	}
+	return nil, nil
 }
 
 func NewEmailService(config *EmailConfig) *EmailService {
@@ -40,7 +65,6 @@ If you did not expect this invitation, you can ignore this email.
 Best regards,
 ELMOCPC Team
 `, toName, inviterName, teamName, invitationLink)
-
 	return es.sendEmail(toEmail, subject, body)
 }
 
@@ -56,7 +80,6 @@ Your team is now registered and ready to participate in ELMOCPC competitions.
 Best regards,
 ELMOCPC Team
 `, toName, teamName)
-
 	return es.sendEmail(toEmail, subject, body)
 }
 
@@ -75,14 +98,19 @@ Please review your team information and try again if you believe this is an erro
 Best regards,
 ELMOCPC Team
 `, toName, teamName, rejectionReason)
-
 	return es.sendEmail(toEmail, subject, body)
 }
 
 func (es *EmailService) SendEmail(to, subject, body string) error {
-	message := fmt.Sprintf("To: %s\r\nSubject: %s\r\n\r\n%s", to, subject, body)
+	from := fmt.Sprintf("%s <%s>", es.config.SenderName, es.config.SenderEmail)
+	message := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s",
+		from, to, subject, body)
 
-	auth := smtp.PlainAuth("", es.config.SenderEmail, es.config.SenderPassword, es.config.SMTPServer)
+	auth := &LoginAuth{
+		username: es.config.SenderEmail,
+		password: es.config.SenderPassword,
+	}
+
 	err := smtp.SendMail(
 		es.config.SMTPServer+":"+es.config.SMTPPort,
 		auth,
@@ -90,7 +118,6 @@ func (es *EmailService) SendEmail(to, subject, body string) error {
 		[]string{to},
 		[]byte(message),
 	)
-
 	return err
 }
 

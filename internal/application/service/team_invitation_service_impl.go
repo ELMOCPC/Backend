@@ -118,7 +118,7 @@ func (tis *TeamInvitationServiceImpl) SendInvitations(teamID, invitedByID uint, 
 		}
 
 		invitationLink := fmt.Sprintf(
-			"https://your-frontend-url/accept-invite?token=%s",
+			"https://84.32.41.215/accept-invite?token=%s",
 			token,
 		)
 

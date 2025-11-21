@@ -8,7 +8,7 @@ const (
 	TeamStatusDraft           TeamStatus = "draft"
 	TeamStatusSubmitted       TeamStatus = "submitted"
 	TeamStatusWaitingPayment  TeamStatus = "waiting_for_payment"
-	TeamStatusVerified        TeamStatus = "verified"
+	TeamStatusAccepted        TeamStatus = "accepted"
 	TeamStatusRejected        TeamStatus = "rejected"
 )
 
