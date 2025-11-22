@@ -83,21 +83,18 @@ ELMOCPC Team
 	return es.sendEmail(toEmail, subject, body)
 }
 
-func (es *EmailService) SendTeamRejectionNotification(toEmail, toName, teamName, rejectionReason string) error {
+func (es *EmailService) SendTeamRejectionNotification(toEmail, toName, teamName string) error {
 	subject := fmt.Sprintf("Team '%s' validation unsuccessful", teamName)
 	body := fmt.Sprintf(`
 Dear %s,
 
 Unfortunately, your team "%s" did not pass the validation process.
 
-Rejection Reason:
-%s
-
 Please review your team information and try again if you believe this is an error.
 
 Best regards,
 ELMOCPC Team
-`, toName, teamName, rejectionReason)
+`, toName, teamName)
 	return es.sendEmail(toEmail, subject, body)
 }
 

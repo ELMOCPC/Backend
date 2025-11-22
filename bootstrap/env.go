@@ -19,10 +19,10 @@ type Env struct {
 }
 
 type SMTP struct {
-	Server   string
-	Port     string
-	Email    string
-	Password string
+	Server     string
+	Port       string
+	Email      string
+	Password   string
 	SenderName string
 }
 
@@ -70,6 +70,7 @@ type S3 struct {
 }
 
 type BucketName struct {
+	Receipts string
 }
 
 type SuperAdmin struct {
@@ -121,7 +122,9 @@ func NewEnv() *Env {
 			AccessKey: os.Getenv("S3_ACCESS_KEY"),
 			SecretKey: os.Getenv("S3_SECRET_KEY"),
 			Endpoint:  os.Getenv("S3_ENDPOINT"),
-			Buckets:   BucketName{},
+			Buckets: BucketName{
+				Receipts: os.Getenv("RECEIPT_BUCKET_NAME"),
+			},
 		},
 		SMTP: SMTP{
 			Server:     os.Getenv("SMTP_SERVER"),

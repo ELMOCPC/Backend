@@ -33,35 +33,32 @@ type RejectInvitationRequest struct {
 	Token string `json:"token" validate:"required"`
 }
 
-type UploadReceiptRequest struct {
-	ReceiptImageURL string `json:"receipt_image_url" validate:"required,url"`
-}
-
 type VerifyReceiptRequest struct {
 	Approved bool   `json:"approved"`
 	Notes    string `json:"notes"`
 }
 
 type RejectTeamRequest struct {
-	RejectionReason string `json:"rejection_reason" validate:"required"`
 }
 
 // Response DTOs
 
 type PendingInvitationResponse struct {
 	ID        uint   `json:"id"`
+	Token     string `json:"token"`
 	Email     string `json:"email"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	ExpiresAt string `json:"expires_at"`
 }
 type TeamResponse struct {
-	ID          uint            `json:"id"`
-	Name        string          `json:"name"`
-	Description string          `json:"description"`
-	CreatorID   uint            `json:"creator_id"`
-	Status      string          `json:"status"`
-	Members     []*UserResponse `json:"members"`
+	ID              uint            `json:"id"`
+	Name            string          `json:"name"`
+	Description     string          `json:"description"`
+	CreatorID       uint            `json:"creator_id"`
+	Status          string          `json:"status"`
+	Members         []*UserResponse `json:"members"`
+	ReceiptImageURL string          `json:"receipt_image_url,omitempty"`
 }
 
 type UserResponse struct {

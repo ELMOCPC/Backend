@@ -5,13 +5,24 @@ import "github.com/ELMOCPC/Backend/internal/infrastructure/database"
 type TeamStatus string
 
 const (
-	TeamStatusDraft            TeamStatus = "draft"
-	TeamStatusSubmitted        TeamStatus = "submitted"
-	TeamStatusWaitingPayment   TeamStatus = "waiting_for_payment"
-	TeamStatusReceiptPending   TeamStatus = "receipt_pending"
-	TeamStatusAccepted         TeamStatus = "accepted"
-	TeamStatusRejected         TeamStatus = "rejected"
+	TeamStatusDraft          TeamStatus = "draft"
+	TeamStatusSubmitted      TeamStatus = "submitted"
+	TeamStatusWaitingPayment TeamStatus = "waiting_for_payment"
+	TeamStatusReceiptPending TeamStatus = "receipt_pending"
+	TeamStatusAccepted       TeamStatus = "accepted"
+	TeamStatusRejected       TeamStatus = "rejected"
 )
+
+func GetAllTeamStatuses() []TeamStatus {
+	return []TeamStatus{
+		TeamStatusDraft,
+		TeamStatusSubmitted,
+		TeamStatusWaitingPayment,
+		TeamStatusReceiptPending,
+		TeamStatusAccepted,
+		TeamStatusRejected,
+	}
+}
 
 type Team struct {
 	database.Model

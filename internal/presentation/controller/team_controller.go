@@ -1,18 +1,21 @@
 package controller
 
 import (
+	"mime/multipart"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
 	"github.com/ELMOCPC/Backend/internal/domain/entity"
+	"github.com/ELMOCPC/Backend/internal/domain/enum"
 	"github.com/ELMOCPC/Backend/internal/domain/exception"
 	repositoryPostgres "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
+	"github.com/ELMOCPC/Backend/internal/domain/storage/s3"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 	"github.com/ELMOCPC/Backend/internal/presentation/dto"
 	"github.com/gin-gonic/gin"
 )
-
 
 type TeamController struct {
 	teamService           usecase.TeamService
@@ -20,6 +23,7 @@ type TeamController struct {
 	paymentReceiptService usecase.PaymentReceiptService
 	emailService          usecase.EmailService
 	userRepository        repositoryPostgres.UserRepository
+	s3Storage             s3.S3Storage
 	db                    database.Database
 }
 
@@ -29,6 +33,7 @@ func NewTeamController(
 	paymentReceiptService usecase.PaymentReceiptService,
 	emailService usecase.EmailService,
 	userRepository repositoryPostgres.UserRepository,
+	s3Storage s3.S3Storage,
 	db database.Database,
 ) *TeamController {
 	return &TeamController{
@@ -37,8 +42,20 @@ func NewTeamController(
 		paymentReceiptService: paymentReceiptService,
 		emailService:          emailService,
 		userRepository:        userRepository,
+		s3Storage:             s3Storage,
 		db:                    db,
 	}
+}
+
+func (tc *TeamController) GetTeamStatuses(ctx *gin.Context) {
+	statuses := entity.GetAllTeamStatuses()
+
+	response := make([]string, len(statuses))
+	for i, status := range statuses {
+		response[i] = string(status)
+	}
+
+	Response(ctx, http.StatusOK, "team statuses retrieved successfully", response)
 }
 
 func (tc *TeamController) CreateTeam(ctx *gin.Context) {
@@ -184,6 +201,7 @@ func (tc *TeamController) GetPendingTeamInvitations(ctx *gin.Context) {
 	for _, token := range tokens {
 		responses = append(responses, &dto.PendingInvitationResponse{
 			ID:        token.ID,
+			Token:     token.Token,
 			Email:     token.Email,
 			FirstName: token.FirstName,
 			LastName:  token.LastName,
@@ -197,13 +215,19 @@ func (tc *TeamController) GetPendingTeamInvitations(ctx *gin.Context) {
 func (tc *TeamController) CancelTeamInvitation(ctx *gin.Context) {
 	userID := ctx.GetUint("ID")
 
-	tokenID, err := strconv.ParseUint(ctx.Param("tokenId"), 10, 32)
+	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
-		Response(ctx, http.StatusBadRequest, "invalid token id", nil)
+		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
 		return
 	}
 
-	err = tc.teamService.CancelInvitationToken(uint(tokenID), userID)
+	token := ctx.Param("tokenId")
+	if token == "" {
+		Response(ctx, http.StatusBadRequest, "invalid token", nil)
+		return
+	}
+
+	err = tc.teamService.CancelInvitationToken(uint(teamID), token, userID)
 	if err != nil {
 		panic(err)
 	}
@@ -266,13 +290,24 @@ func (tc *TeamController) mapTeamResponse(team *entity.Team) *dto.TeamResponse {
 		}
 	}
 
+	// Get receipt URL if exists
+	var receiptURL string
+	receipt, err := tc.paymentReceiptService.GetReceiptByTeamID(team.ID)
+	if err == nil && receipt != nil && receipt.ReceiptImageURL != "" {
+		presignedURL, err := tc.s3Storage.GetPresignedURL(enum.BucketTypeReceipts, receipt.ReceiptImageURL, 24*time.Hour)
+		if err == nil {
+			receiptURL = presignedURL
+		}
+	}
+
 	return &dto.TeamResponse{
-		ID:          team.ID,
-		Name:        team.Name,
-		Description: team.Description,
-		CreatorID:   team.CreatorID,
-		Status:      string(team.Status),
-		Members:     members,
+		ID:              team.ID,
+		Name:            team.Name,
+		Description:     team.Description,
+		CreatorID:       team.CreatorID,
+		Status:          string(team.Status),
+		Members:         members,
+		ReceiptImageURL: receiptURL,
 	}
 }
 
@@ -300,9 +335,11 @@ func (tc *TeamController) InviteMembers(ctx *gin.Context) {
 
 	tokens, err := tc.teamInvitationService.SendInvitations(uint(teamID), userID, members)
 	if err != nil {
-		switch err.(type) {
+		switch e := err.(type) {
 		case exception.NotFoundError:
 			Response(ctx, http.StatusNotFound, "team not found", nil)
+		case exception.ForbiddenError:
+			Response(ctx, http.StatusForbidden, e.Message, nil)
 		case *exception.ConflictErrors:
 			panic(err)
 		case exception.ValidationErrors:
@@ -313,9 +350,17 @@ func (tc *TeamController) InviteMembers(ctx *gin.Context) {
 		return
 	}
 
+	invitations := make([]map[string]interface{}, len(members))
+	for i, member := range members {
+		invitations[i] = map[string]interface{}{
+			"token": tokens[i],
+			"email": member.Email,
+		}
+	}
+
 	response := map[string]interface{}{
-		"tokens":  tokens,
-		"team_id": teamID,
+		"team_id":     teamID,
+		"invitations": invitations,
 	}
 	Response(ctx, http.StatusOK, "invitations sent successfully", response)
 }
@@ -396,26 +441,17 @@ func (tc *TeamController) GetPendingInvitations(ctx *gin.Context) {
 }
 
 func (tc *TeamController) UploadPaymentReceipt(ctx *gin.Context) {
-	req := Validated[dto.UploadReceiptRequest](ctx)
-	userID := ctx.GetUint("ID")
-
-	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
-	if err != nil {
-		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
-		return
+	type UploadReceiptParams struct {
+		TeamID  uint                  `uri:"id" validate:"required"`
+		Receipt *multipart.FileHeader `form:"receipt" validate:"required"`
 	}
 
-	receipt, err := tc.paymentReceiptService.UploadReceipt(uint(teamID), userID, req.ReceiptImageURL)
+	params := Validated[UploadReceiptParams](ctx)
+	userID := ctx.GetUint("ID")
+
+	receipt, err := tc.paymentReceiptService.UploadReceipt(params.TeamID, userID, params.Receipt)
 	if err != nil {
-		switch err.(type) {
-		case exception.NotFoundError:
-			panic(err)
-		case exception.ValidationErrors:
-			panic(err)
-		default:
-			panic(err)
-		}
-		return
+		panic(err)
 	}
 
 	response := tc.mapReceiptResponse(receipt)
@@ -487,7 +523,6 @@ func (tc *TeamController) ValidateTeam(ctx *gin.Context) {
 		panic(err)
 	}
 
-	// Send email to all team members
 	for _, member := range team.Members {
 		_ = tc.emailService.SendTeamApprovedNotification(member.Email, member.FirstName, team.Name)
 	}
@@ -497,21 +532,19 @@ func (tc *TeamController) ValidateTeam(ctx *gin.Context) {
 }
 
 func (tc *TeamController) RejectTeam(ctx *gin.Context) {
-	req := Validated[dto.RejectTeamRequest](ctx)
 	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
 		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
 		return
 	}
 
-	team, err := tc.teamService.RejectTeam(uint(teamID), req.RejectionReason)
+	team, err := tc.teamService.RejectTeam(uint(teamID))
 	if err != nil {
 		panic(err)
 	}
 
-	// Send email to all team members
 	for _, member := range team.Members {
-		_ = tc.emailService.SendTeamRejectionNotification(member.Email, member.FirstName, team.Name, req.RejectionReason)
+		_ = tc.emailService.SendTeamRejectionNotification(member.Email, member.FirstName, team.Name)
 	}
 
 	response := tc.mapTeamResponse(team)
@@ -525,10 +558,8 @@ func (tc *TeamController) GetAllTeams(ctx *gin.Context) {
 	var err error
 
 	if status != "" {
-		// Filter by status if provided
 		teams, err = tc.teamService.GetTeamsByStatus(entity.TeamStatus(status))
 	} else {
-		// Get all teams
 		teams, err = tc.teamService.GetAllTeams()
 	}
 
@@ -601,12 +632,21 @@ func (tc *TeamController) mapReceiptResponse(receipt *entity.PaymentReceipt) *dt
 		verifiedByName = receipt.VerifiedBy.FirstName + " " + receipt.VerifiedBy.LastName
 	}
 
+	// Generate presigned URL for the receipt image
+	receiptURL := receipt.ReceiptImageURL
+	if receipt.ReceiptImageURL != "" {
+		presignedURL, err := tc.s3Storage.GetPresignedURL(enum.BucketTypeReceipts, receipt.ReceiptImageURL, 24*time.Hour)
+		if err == nil {
+			receiptURL = presignedURL
+		}
+	}
+
 	return &dto.PaymentReceiptResponse{
 		ID:                receipt.ID,
 		TeamID:            receipt.TeamID,
 		UploadedByID:      receipt.UploadedByID,
 		UploadedByName:    uploadedByName,
-		ReceiptImageURL:   receipt.ReceiptImageURL,
+		ReceiptImageURL:   receiptURL,
 		Status:            string(receipt.Status),
 		VerifiedByID:      receipt.VerifiedByID,
 		VerifiedByName:    verifiedByName,

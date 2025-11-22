@@ -69,8 +69,10 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 	teamService := service.NewTeamService(teamRepository, userRepository, teamInvitationTokenRepository, postgresDatabase)
 	teamInvitationService := service.NewTeamInvitationService(teamInvitationTokenRepository, teamRepository, userRepository, emailService, jwtService, postgresDatabase, env)
 	paymentReceiptRepository := postgres.NewPaymentReceiptRepository()
-	paymentReceiptService := service.NewPaymentReceiptService(paymentReceiptRepository, teamRepository, userRepository, emailService, postgresDatabase)
-	teamController := controller.NewTeamController(teamService, teamInvitationService, paymentReceiptService, emailService, userRepository, postgresDatabase)
+	s3 := ProvideStorageConfig(config)
+	s3Storage := storage.NewS3Storage(constants, s3)
+	paymentReceiptService := service.NewPaymentReceiptService(paymentReceiptRepository, teamRepository, userRepository, emailService, s3Storage, constants, postgresDatabase)
+	teamController := controller.NewTeamController(teamService, teamInvitationService, paymentReceiptService, emailService, userRepository, s3Storage, postgresDatabase)
 	customerControllers := &CustomerControllers{
 		TeamController: teamController,
 	}

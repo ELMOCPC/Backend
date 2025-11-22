@@ -23,11 +23,11 @@ type TeamService interface {
 	GetUserInvitations(email string) ([]*entity.TeamInvitation, error)
 	GetPendingInvitationTokens(teamID, userID uint) ([]*entity.TeamInvitationToken, error)
 	CancelInvitation(invitationID, userID uint) error
-	CancelInvitationToken(tokenID, userID uint) error
+	CancelInvitationToken(teamID uint, token string, userID uint) error
 
 	// Team validation (admin operations)
 	ValidateTeam(teamID uint) (*entity.Team, error)
-	RejectTeam(teamID uint, rejectionReason string) (*entity.Team, error)
+	RejectTeam(teamID uint) (*entity.Team, error)
 	GetPendingTeams() ([]*entity.Team, error)
 	GetAllTeams() ([]*entity.Team, error)
 	GetTeamsByStatus(status entity.TeamStatus) ([]*entity.Team, error)

@@ -1,13 +1,19 @@
 package service
 
 import (
+	"mime/multipart"
+	"path/filepath"
 	"time"
 
+	"github.com/ELMOCPC/Backend/bootstrap"
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
 	"github.com/ELMOCPC/Backend/internal/domain/entity"
+	"github.com/ELMOCPC/Backend/internal/domain/enum"
 	"github.com/ELMOCPC/Backend/internal/domain/exception"
 	repository "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
+	"github.com/ELMOCPC/Backend/internal/domain/storage/s3"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
+	"github.com/google/uuid"
 )
 
 type PaymentReceiptServiceImpl struct {
@@ -15,6 +21,8 @@ type PaymentReceiptServiceImpl struct {
 	teamRepository     repository.TeamRepository
 	userRepository     repository.UserRepository
 	emailService       usecase.EmailService
+	s3Storage          s3.S3Storage
+	constants          *bootstrap.Constants
 	db                 database.Database
 }
 
@@ -23,6 +31,8 @@ func NewPaymentReceiptService(
 	teamRepository repository.TeamRepository,
 	userRepository repository.UserRepository,
 	emailService usecase.EmailService,
+	s3Storage s3.S3Storage,
+	constants *bootstrap.Constants,
 	db database.Database,
 ) usecase.PaymentReceiptService {
 	return &PaymentReceiptServiceImpl{
@@ -30,12 +40,13 @@ func NewPaymentReceiptService(
 		teamRepository:     teamRepository,
 		userRepository:     userRepository,
 		emailService:       emailService,
+		s3Storage:          s3Storage,
+		constants:          constants,
 		db:                 db,
 	}
 }
 
-func (prs *PaymentReceiptServiceImpl) UploadReceipt(teamID, userID uint, receiptImageURL string) (*entity.PaymentReceipt, error) {
-	// Verify team exists
+func (prs *PaymentReceiptServiceImpl) UploadReceipt(teamID, userID uint, file *multipart.FileHeader) (*entity.PaymentReceipt, error) {
 	team, err := prs.teamRepository.FindTeamByID(prs.db, teamID)
 	if err != nil {
 		return nil, err
@@ -44,14 +55,12 @@ func (prs *PaymentReceiptServiceImpl) UploadReceipt(teamID, userID uint, receipt
 		return nil, exception.NotFoundError{Item: "team"}
 	}
 
-	// Verify team status is waiting_for_payment
 	if team.Status != entity.TeamStatusWaitingPayment {
 		validationErr := exception.ValidationErrors{}
-		validationErr.Add("team", "invalid_status_for_payment")
+		validationErr.Add("team", "invalid_status")
 		return nil, validationErr
 	}
 
-	// Check if user is a team member
 	isMember, err := prs.teamRepository.IsTeamMember(prs.db, teamID, userID)
 	if err != nil {
 		return nil, err
@@ -60,11 +69,18 @@ func (prs *PaymentReceiptServiceImpl) UploadReceipt(teamID, userID uint, receipt
 		return nil, exception.NotFoundError{Item: "team_member"}
 	}
 
-	// Create payment receipt
+	ext := filepath.Ext(file.Filename)
+	fileName := uuid.New().String() + ext
+	key := prs.constants.BucketPath.GetReceiptPath(teamID, fileName)
+
+	if err := prs.s3Storage.UploadObject(enum.BucketTypeReceipts, key, file); err != nil {
+		return nil, err
+	}
+
 	receipt := &entity.PaymentReceipt{
 		TeamID:          teamID,
 		UploadedByID:    userID,
-		ReceiptImageURL: receiptImageURL,
+		ReceiptImageURL: key,
 		Status:          entity.ReceiptStatusPending,
 	}
 
@@ -72,13 +88,11 @@ func (prs *PaymentReceiptServiceImpl) UploadReceipt(teamID, userID uint, receipt
 		return nil, err
 	}
 
-	// Update team status to receipt_pending
 	team.Status = entity.TeamStatusReceiptPending
 	if err := prs.teamRepository.UpdateTeam(prs.db, team); err != nil {
 		return nil, err
 	}
 
-	// Notify team members about payment status
 	members := team.Members
 	uploader, err := prs.userRepository.FindUserByID(prs.db, userID)
 	if err != nil {

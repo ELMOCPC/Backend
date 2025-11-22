@@ -55,6 +55,16 @@ func (tis *TeamInvitationServiceImpl) SendInvitations(teamID, invitedByID uint, 
 		return nil, exception.NotFoundError{Item: "team"}
 	}
 
+	// Verify that only the team creator can invite members
+	if team.CreatorID != invitedByID {
+		return nil, exception.ForbiddenError{Message: "only team creator can invite members"}
+	}
+
+	// Check if team is in draft status
+	if team.Status != entity.TeamStatusDraft {
+		return nil, exception.ForbiddenError{Message: "cannot invite members to a submitted team"}
+	}
+
 	// Check team member limit (max 3)
 	if len(team.Members)+len(members) > 3 {
 		validationErr := exception.ValidationErrors{}
