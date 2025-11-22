@@ -10,6 +10,7 @@ type InviteMemberData struct {
 	TshirtSize    string
 	University    string
 	StudentNumber string
+	NationalCode  string
 }
 
 type TeamInvitationService interface {

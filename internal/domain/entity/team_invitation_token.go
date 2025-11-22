@@ -18,6 +18,7 @@ type TeamInvitationToken struct {
 	TshirtSize    string
 	University    string
 	StudentNumber string
+	NationalCode  string
 	ExpiresAt     time.Time
 	UsedAt        *time.Time
 	Accepted      bool `gorm:"default:false"`

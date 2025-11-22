@@ -330,6 +330,7 @@ func (tc *TeamController) InviteMembers(ctx *gin.Context) {
 			TshirtSize:    m.TshirtSize,
 			University:    m.University,
 			StudentNumber: m.StudentNumber,
+			NationalCode:  m.NationalCode,
 		}
 	}
 

@@ -77,6 +77,7 @@ func (ac *AuthController) SignUp(ctx *gin.Context) {
 		req.TshirtSize,
 		req.University,
 		req.StudentNumber,
+		req.NationalCode,
 	); err != nil {
 		switch err.(type) {
 		case *exception.ConflictErrors:

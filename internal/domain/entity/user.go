@@ -15,6 +15,7 @@ type User struct {
 	TshirtSize    enum.TshirtSize   `gorm:"type:varchar(10)"`
 	University    string            `gorm:"type:varchar(255)"`
 	StudentNumber string            `gorm:"type:varchar(50)"`
+	NationalCode  string            `gorm:"type:varchar(10)"`
 	EmailVerified bool              `gorm:"default:false"`
 	Roles         []Role            `gorm:"many2many:user_roles;constraint:OnDelete:CASCADE"`
 	TeamID        *uint             `gorm:"index"`

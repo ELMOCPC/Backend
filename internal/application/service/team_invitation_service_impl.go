@@ -112,6 +112,7 @@ func (tis *TeamInvitationServiceImpl) SendInvitations(teamID, invitedByID uint, 
 			TshirtSize:    member.TshirtSize,
 			University:    member.University,
 			StudentNumber: member.StudentNumber,
+			NationalCode:  member.NationalCode,
 			ExpiresAt:     time.Now().Add(7 * 24 * time.Hour), // 7 days
 			Accepted:      false,
 			Rejected:      false,
@@ -223,6 +224,7 @@ func (tis *TeamInvitationServiceImpl) AcceptInvitation(token string) (*entity.Us
 			TshirtSize:    enum.TshirtSize(invitationToken.TshirtSize),
 			University:    invitationToken.University,
 			StudentNumber: invitationToken.StudentNumber,
+			NationalCode:  invitationToken.NationalCode,
 			EmailVerified: true,
 		}
 

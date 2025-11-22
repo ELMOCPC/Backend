@@ -21,6 +21,7 @@ type SignupData struct {
 	TshirtSize    string `json:"tshirt_size"`
 	University    string `json:"university"`
 	StudentNumber string `json:"student_number"`
+	NationalCode  string `json:"national_code"`
 }
 
 type AuthService struct {
@@ -48,7 +49,7 @@ func NewAuthService(
 }
 
 
-func (as *AuthService) SignUp(firstName, lastName, email, phone, tshirtSize, university, studentNumber string) error {
+func (as *AuthService) SignUp(firstName, lastName, email, phone, tshirtSize, university, studentNumber, nationalCode string) error {
 	ctx := context.Background()
 
 	// Check if user with this email already exists
@@ -82,6 +83,7 @@ func (as *AuthService) SignUp(firstName, lastName, email, phone, tshirtSize, uni
 		TshirtSize:    tshirtSize,
 		University:    university,
 		StudentNumber: studentNumber,
+		NationalCode:  nationalCode,
 	}
 
 	if err := as.cacheRepo.Set(ctx, "signup:"+email, signupData, 600); err != nil {
@@ -131,6 +133,7 @@ func (as *AuthService) VerifySignUp(email, code string) (*entity.User, string, s
 		TshirtSize:    enum.TshirtSize(signupData.TshirtSize),
 		University:    signupData.University,
 		StudentNumber: signupData.StudentNumber,
+		NationalCode:  signupData.NationalCode,
 		EmailVerified: true,
 	}
 

@@ -21,6 +21,7 @@ type CompleteSignUpRequest struct {
 	TshirtSize    string `json:"tshirt_size" validate:"required,oneof=XS S M L XL XXL"`
 	University    string `json:"university"`
 	StudentNumber string `json:"student_number"`
+	NationalCode  string `json:"national_code" validate:"required"`
 }
 
 type AuthResponse struct {
