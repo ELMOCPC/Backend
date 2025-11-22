@@ -27,6 +27,9 @@ func main() {
 		&entity.Permission{},
 		&entity.Team{},
 		&entity.TeamInvitation{},
+		&entity.OTP{},
+		&entity.TeamInvitationToken{},
+		&entity.PaymentReceipt{},
 	)
 
 	app.Seeds.RoleSeeder.SeedRoles()

@@ -83,3 +83,7 @@ func NewConstants() *Constants {
 func (r *RedisKey) GenerateOTPKey(value string) string {
 	return fmt.Sprintf("otp:%s", value)
 }
+
+func (path *BucketPath) GetReceiptPath(teamID uint, fileName string) string {
+	return fmt.Sprintf("receipts/%d/%s", teamID, fileName)
+}

@@ -9,20 +9,23 @@ import (
 )
 
 type TeamService struct {
-	teamRepository repository.TeamRepository
-	userRepository repository.UserRepository
-	db             database.Database
+	teamRepository          repository.TeamRepository
+	userRepository          repository.UserRepository
+	teamInvitationTokenRepo repository.TeamInvitationTokenRepository
+	db                      database.Database
 }
 
 func NewTeamService(
 	teamRepository repository.TeamRepository,
 	userRepository repository.UserRepository,
+	teamInvitationTokenRepo repository.TeamInvitationTokenRepository,
 	db database.Database,
 ) *TeamService {
 	return &TeamService{
-		teamRepository: teamRepository,
-		userRepository: userRepository,
-		db:             db,
+		teamRepository:          teamRepository,
+		userRepository:          userRepository,
+		teamInvitationTokenRepo: teamInvitationTokenRepo,
+		db:                      db,
 	}
 }
 
@@ -342,7 +345,6 @@ func (ts *TeamService) RejectInvitation(invitationID, userID uint) error {
 	return nil
 }
 
-// RemoveMember removes a member from the team (creator only)
 func (ts *TeamService) RemoveMember(teamID, userID, memberToRemoveID uint) error {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
 	if err != nil {
@@ -398,7 +400,6 @@ func (ts *TeamService) RemoveMember(teamID, userID, memberToRemoveID uint) error
 	return nil
 }
 
-// LeaveTeam allows a member to leave the team
 func (ts *TeamService) LeaveTeam(teamID, userID uint) error {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
 	if err != nil {
@@ -408,24 +409,20 @@ func (ts *TeamService) LeaveTeam(teamID, userID uint) error {
 		return exception.NotFoundError{Item: "team"}
 	}
 
-	// Check if user is the creator
 	if team.CreatorID == userID {
 		conflictErr := exception.ConflictErrors{}
 		conflictErr.Add("team", "team_leader_cannot_leave")
 		return conflictErr
 	}
 
-	// Check if team is still in draft
 	if team.Status != entity.TeamStatusDraft {
 		return exception.ForbiddenError{Resource: "team", Message: "cannot leave a submitted team"}
 	}
 
-	// Remove member
 	if err := ts.teamRepository.RemoveTeamMember(ts.db, teamID, userID); err != nil {
 		return err
 	}
 
-	// Update user's team
 	user, err := ts.userRepository.FindUserByID(ts.db, userID)
 	if err != nil {
 		return err
@@ -440,7 +437,6 @@ func (ts *TeamService) LeaveTeam(teamID, userID uint) error {
 	return nil
 }
 
-// GetTeamMembers retrieves all members of a team
 func (ts *TeamService) GetTeamMembers(teamID uint) ([]*entity.User, error) {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
 	if err != nil {
@@ -453,7 +449,6 @@ func (ts *TeamService) GetTeamMembers(teamID uint) ([]*entity.User, error) {
 	return ts.teamRepository.GetTeamMembers(ts.db, teamID)
 }
 
-// SubmitTeam submits a team for validation (locks team)
 func (ts *TeamService) SubmitTeam(teamID, userID uint) (*entity.Team, error) {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
 	if err != nil {
@@ -463,19 +458,16 @@ func (ts *TeamService) SubmitTeam(teamID, userID uint) (*entity.Team, error) {
 		return nil, exception.NotFoundError{Item: "team"}
 	}
 
-	// Check if user is the creator
 	if team.CreatorID != userID {
 		return nil, exception.ForbiddenError{Resource: "team", Message: "only team creator can submit team"}
 	}
 
-	// Check if team is in draft status
 	if team.Status != entity.TeamStatusDraft {
 		conflictErr := exception.ConflictErrors{}
 		conflictErr.Add("team", "invalid_status")
 		return nil, conflictErr
 	}
 
-	// Check if team has at least 1 member
 	memberCount, err := ts.teamRepository.GetTeamMemberCount(ts.db, teamID)
 	if err != nil {
 		return nil, err
@@ -486,7 +478,37 @@ func (ts *TeamService) SubmitTeam(teamID, userID uint) (*entity.Team, error) {
 		return nil, conflictErr
 	}
 
-	// Update team status
+	pendingTokens, err := ts.teamInvitationTokenRepo.FindTokensByTeamID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	pendingCount := 0
+	for _, token := range pendingTokens {
+		if !token.Accepted && !token.Rejected {
+			pendingCount++
+		}
+	}
+
+	if pendingCount > 0 {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("team", "pending_invitations")
+		return nil, conflictErr
+	}
+
+	invitations, err := ts.teamRepository.FindInvitationsByTeamID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, invitation := range invitations {
+		if invitation.Status == entity.InvitationStatusPending {
+			conflictErr := exception.ConflictErrors{}
+			conflictErr.Add("team", "pending_invitations")
+			return nil, conflictErr
+		}
+	}
+
 	team.Status = entity.TeamStatusSubmitted
 	if err := ts.teamRepository.UpdateTeam(ts.db, team); err != nil {
 		return nil, err
@@ -495,12 +517,38 @@ func (ts *TeamService) SubmitTeam(teamID, userID uint) (*entity.Team, error) {
 	return team, nil
 }
 
-// GetUserInvitations retrieves all invitations for a user's email
 func (ts *TeamService) GetUserInvitations(email string) ([]*entity.TeamInvitation, error) {
 	return ts.teamRepository.FindInvitationsByEmail(ts.db, email)
 }
 
-// CancelInvitation cancels a pending invitation (only team creator can cancel)
+func (ts *TeamService) GetPendingInvitationTokens(teamID, userID uint) ([]*entity.TeamInvitationToken, error) {
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if team == nil {
+		return nil, exception.NotFoundError{Item: "team"}
+	}
+
+	if team.CreatorID != userID {
+		return nil, exception.ForbiddenError{Resource: "team", Message: "only team creator can view pending invitations"}
+	}
+
+	tokens, err := ts.teamInvitationTokenRepo.FindTokensByTeamID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	var pendingTokens []*entity.TeamInvitationToken
+	for _, token := range tokens {
+		if !token.Accepted && !token.Rejected {
+			pendingTokens = append(pendingTokens, token)
+		}
+	}
+
+	return pendingTokens, nil
+}
+
 func (ts *TeamService) CancelInvitation(invitationID, userID uint) error {
 	invitation, err := ts.teamRepository.FindInvitationByID(ts.db, invitationID)
 	if err != nil {
@@ -510,7 +558,6 @@ func (ts *TeamService) CancelInvitation(invitationID, userID uint) error {
 		return exception.NotFoundError{Item: "invitation"}
 	}
 
-	// Get team to check if user is creator
 	team, err := ts.teamRepository.FindTeamByID(ts.db, invitation.TeamID)
 	if err != nil {
 		return err
@@ -519,19 +566,16 @@ func (ts *TeamService) CancelInvitation(invitationID, userID uint) error {
 		return exception.NotFoundError{Item: "team"}
 	}
 
-	// Check if user is the team creator
 	if team.CreatorID != userID {
 		return exception.ForbiddenError{Resource: "invitation", Message: "only team creator can cancel invitations"}
 	}
 
-	// Check if invitation is still pending
 	if invitation.Status != entity.InvitationStatusPending {
 		conflictErr := exception.ConflictErrors{}
 		conflictErr.Add("invitation", "invalid_status")
 		return conflictErr
 	}
 
-	// Delete the invitation
 	if err := ts.teamRepository.DeleteInvitation(ts.db, invitationID); err != nil {
 		return err
 	}
@@ -539,7 +583,44 @@ func (ts *TeamService) CancelInvitation(invitationID, userID uint) error {
 	return nil
 }
 
-// CanModifyTeam checks if a user can modify a team
+func (ts *TeamService) CancelInvitationToken(teamID uint, token string, userID uint) error {
+	invitationToken, err := ts.teamInvitationTokenRepo.FindTokenByToken(ts.db, token)
+	if err != nil {
+		return err
+	}
+	if invitationToken == nil {
+		return exception.NotFoundError{Item: "invitation_token"}
+	}
+
+	if invitationToken.TeamID != teamID {
+		return exception.NotFoundError{Item: "invitation_token"}
+	}
+
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return err
+	}
+	if team == nil {
+		return exception.NotFoundError{Item: "team"}
+	}
+
+	if team.CreatorID != userID {
+		return exception.ForbiddenError{Resource: "invitation_token", Message: "only team creator can cancel invitations"}
+	}
+
+	if invitationToken.Accepted || invitationToken.Rejected {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("invitation_token", "invalid_status")
+		return conflictErr
+	}
+
+	if err := ts.teamInvitationTokenRepo.DeleteToken(ts.db, invitationToken.ID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (ts *TeamService) CanModifyTeam(teamID, userID uint) (bool, error) {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
 	if err != nil {
@@ -549,17 +630,74 @@ func (ts *TeamService) CanModifyTeam(teamID, userID uint) (bool, error) {
 		return false, nil
 	}
 
-	// Only creator can modify draft teams
 	if team.CreatorID != userID {
 		return false, nil
 	}
 
-	// Team must be in draft status
 	if team.Status != entity.TeamStatusDraft {
 		return false, nil
 	}
 
 	return true, nil
+}
+
+func (ts *TeamService) ValidateTeam(teamID uint) (*entity.Team, error) {
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if team == nil {
+		return nil, exception.NotFoundError{Item: "team"}
+	}
+
+	if team.Status != entity.TeamStatusSubmitted {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("team", "invalid_status")
+		return nil, conflictErr
+	}
+
+	team.Status = entity.TeamStatusWaitingPayment
+	if err := ts.teamRepository.UpdateTeam(ts.db, team); err != nil {
+		return nil, err
+	}
+
+	return team, nil
+}
+
+func (ts *TeamService) RejectTeam(teamID uint) (*entity.Team, error) {
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if team == nil {
+		return nil, exception.NotFoundError{Item: "team"}
+	}
+
+	if team.Status != entity.TeamStatusSubmitted {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("team", "invalid_status")
+		return nil, conflictErr
+	}
+
+	team.Status = entity.TeamStatusRejected
+	if err := ts.teamRepository.UpdateTeam(ts.db, team); err != nil {
+		return nil, err
+	}
+
+	return team, nil
+}
+
+func (ts *TeamService) GetPendingTeams() ([]*entity.Team, error) {
+	return ts.teamRepository.FindTeamsByStatus(ts.db, entity.TeamStatusSubmitted)
+}
+
+func (ts *TeamService) GetAllTeams() ([]*entity.Team, error) {
+	teams, _, err := ts.teamRepository.FindTeams(ts.db, nil)
+	return teams, err
+}
+
+func (ts *TeamService) GetTeamsByStatus(status entity.TeamStatus) ([]*entity.Team, error) {
+	return ts.teamRepository.FindTeamsByStatus(ts.db, status)
 }
 
 // Ensure TeamService implements the TeamService interface

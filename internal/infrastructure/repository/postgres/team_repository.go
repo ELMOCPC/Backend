@@ -183,3 +183,12 @@ func (repo *TeamRepository) FindTeams(db database.Database, options *postgres.Qu
 
 	return teams, total, nil
 }
+
+func (repo *TeamRepository) FindTeamsByStatus(db database.Database, status entity.TeamStatus) ([]*entity.Team, error) {
+	var teams []*entity.Team
+	result := db.GetDB().Preload("Creator").Preload("Members").Preload("Invitations").Where("status = ?", status).Find(&teams)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return teams, nil
+}

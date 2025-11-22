@@ -29,6 +29,7 @@ func NewS3Storage(
 	storage *bootstrap.S3,
 ) *S3Storage {
 	buckets := make(map[enum.BucketType]string)
+	buckets[enum.BucketTypeReceipts] = storage.Buckets.Receipts
 	return &S3Storage{
 		constants: constants,
 		storage:   storage,

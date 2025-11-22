@@ -10,8 +10,10 @@ import (
 	"github.com/ELMOCPC/Backend/bootstrap"
 	"github.com/ELMOCPC/Backend/internal/application/service"
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
+	cache2 "github.com/ELMOCPC/Backend/internal/domain/repository/cache"
 	postgres2 "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
 	"github.com/ELMOCPC/Backend/internal/domain/storage/s3"
+	"github.com/ELMOCPC/Backend/internal/infrastructure/cache"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/jwt"
 	"github.com/ELMOCPC/Backend/internal/infrastructure/localization"
@@ -50,15 +52,27 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 		Localization: localizationMiddleware,
 		Auth:         authMiddleware,
 	}
-	authService := service.NewAuthService(userRepository, jwtService, postgresDatabase)
-	authController := controller.NewAuthController(authService)
+	env := ProvideEnv(config)
+	client := bootstrap.ProvideRedisClient(env)
+	redisCache := cache.NewRedisCache(client)
+	emailConfig := ProvideSMTPConfig(config)
+	emailService := service.NewEmailService(emailConfig)
+	otpService := service.NewOTPService(redisCache, emailService, env)
+	authService := service.NewAuthService(userRepository, jwtService, otpService, redisCache, postgresDatabase)
+	authController := controller.NewAuthController(authService, otpService)
 	generalControllers := &GeneralControllers{
 		AuthController: authController,
 	}
 	adminControllers := &AdminControllers{}
 	teamRepository := postgres.NewTeamRepository()
-	teamService := service.NewTeamService(teamRepository, userRepository, postgresDatabase)
-	teamController := controller.NewTeamController(teamService, userRepository, postgresDatabase)
+	teamInvitationTokenRepository := postgres.NewTeamInvitationTokenRepository()
+	teamService := service.NewTeamService(teamRepository, userRepository, teamInvitationTokenRepository, postgresDatabase)
+	teamInvitationService := service.NewTeamInvitationService(teamInvitationTokenRepository, teamRepository, userRepository, emailService, jwtService, postgresDatabase, env)
+	paymentReceiptRepository := postgres.NewPaymentReceiptRepository()
+	s3 := ProvideStorageConfig(config)
+	s3Storage := storage.NewS3Storage(constants, s3)
+	paymentReceiptService := service.NewPaymentReceiptService(paymentReceiptRepository, teamRepository, userRepository, emailService, s3Storage, constants, postgresDatabase)
+	teamController := controller.NewTeamController(teamService, teamInvitationService, paymentReceiptService, emailService, userRepository, s3Storage, postgresDatabase)
 	customerControllers := &CustomerControllers{
 		TeamController: teamController,
 	}
@@ -80,9 +94,11 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 
 var DatabaseProviderSet = wire.NewSet(database.NewPostgresDatabase, database.NewRedisDatabase, wire.Bind(new(database.Database), new(*database.PostgresDatabase)), wire.Bind(new(database.Cache), new(*database.RedisDatabase)), wire.Struct(new(Database), "*"))
 
-var RepositoryProviderSet = wire.NewSet(postgres.NewUserRepository, wire.Bind(new(postgres2.UserRepository), new(*postgres.UserRepository)), postgres.NewTeamRepository, wire.Bind(new(postgres2.TeamRepository), new(*postgres.TeamRepository)))
+var CacheProviderSet = wire.NewSet(bootstrap.ProvideRedisClient, cache.NewRedisCache, wire.Bind(new(cache2.CacheRepository), new(*cache.RedisCache)))
 
-var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)), service.NewAuthService, wire.Bind(new(usecase.AuthService), new(*service.AuthService)), service.NewTeamService, wire.Bind(new(usecase.TeamService), new(*service.TeamService)))
+var RepositoryProviderSet = wire.NewSet(postgres.NewUserRepository, wire.Bind(new(postgres2.UserRepository), new(*postgres.UserRepository)), postgres.NewTeamRepository, wire.Bind(new(postgres2.TeamRepository), new(*postgres.TeamRepository)), postgres.NewOTPRepository, postgres.NewTeamInvitationTokenRepository, postgres.NewPaymentReceiptRepository)
+
+var ServiceProviderSet = wire.NewSet(service.NewJWTService, wire.Bind(new(usecase.JwtService), new(*service.JWTService)), service.NewEmailService, wire.Bind(new(usecase.EmailService), new(*service.EmailService)), service.NewOTPService, service.NewAuthService, wire.Bind(new(usecase.AuthService), new(*service.AuthService)), service.NewTeamService, wire.Bind(new(usecase.TeamService), new(*service.TeamService)), service.NewTeamInvitationService, service.NewPaymentReceiptService)
 
 var GeneralControllerProviderSet = wire.NewSet(controller.NewAuthController, wire.Struct(new(GeneralControllers), "*"))
 
@@ -130,8 +146,23 @@ func ProvidePagination(container *bootstrap.Config) *bootstrap.Pagination {
 	return &container.Env.Pagination
 }
 
+func ProvideSMTPConfig(container *bootstrap.Config) *service.EmailConfig {
+	return &service.EmailConfig{
+		SMTPServer:     container.Env.SMTP.Server,
+		SMTPPort:       container.Env.SMTP.Port,
+		SenderEmail:    container.Env.SMTP.Email,
+		SenderPassword: container.Env.SMTP.Password,
+		SenderName:     container.Env.SMTP.SenderName,
+	}
+}
+
+func ProvideEnv(container *bootstrap.Config) *bootstrap.Env {
+	return container.Env
+}
+
 var ProviderSet = wire.NewSet(
 	DatabaseProviderSet,
+	CacheProviderSet,
 	RepositoryProviderSet,
 	ServiceProviderSet,
 	MiddlewareProviderSet,
@@ -140,6 +171,7 @@ var ProviderSet = wire.NewSet(
 	CustomerControllerProviderSet,
 	ControllerProviderSet,
 	AdapterProviderSet,
+	ProvideEnv,
 	ProvideDBConfig,
 	ProvideConstants,
 	ProvideRDBConfig,
@@ -148,6 +180,7 @@ var ProviderSet = wire.NewSet(
 	ProvideJWTKeysPath,
 	ProvideSuperAdminCredentials,
 	ProvidePagination,
+	ProvideSMTPConfig,
 	SeedProviderSet,
 )
 
