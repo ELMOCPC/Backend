@@ -29,9 +29,7 @@ func NewTeamService(
 	}
 }
 
-// CreateTeam creates a new team with the given user as creator
 func (ts *TeamService) CreateTeam(userID uint, name, description string) (*entity.Team, error) {
-	// Check if user already has a team
 	existingTeam, err := ts.teamRepository.FindTeamByUserID(ts.db, userID)
 	if err != nil {
 		return nil, err
@@ -53,12 +51,10 @@ func (ts *TeamService) CreateTeam(userID uint, name, description string) (*entit
 		return nil, err
 	}
 
-	// Add creator as a member
 	if err := ts.teamRepository.AddTeamMember(ts.db, team.ID, userID); err != nil {
 		return nil, err
 	}
 
-	// Update user's team
 	user, err := ts.userRepository.FindUserByID(ts.db, userID)
 	if err != nil {
 		return nil, err
@@ -73,12 +69,10 @@ func (ts *TeamService) CreateTeam(userID uint, name, description string) (*entit
 	return team, nil
 }
 
-// GetTeamByID retrieves a team by its ID
 func (ts *TeamService) GetTeamByID(teamID uint) (*entity.Team, error) {
 	return ts.teamRepository.FindTeamByID(ts.db, teamID)
 }
 
-// GetUserTeam retrieves the team of a user
 func (ts *TeamService) GetUserTeam(userID uint) (*entity.Team, error) {
 	user, err := ts.userRepository.FindUserByID(ts.db, userID)
 	if err != nil {
@@ -90,7 +84,6 @@ func (ts *TeamService) GetUserTeam(userID uint) (*entity.Team, error) {
 	return ts.teamRepository.FindTeamByID(ts.db, *user.TeamID)
 }
 
-// UpdateTeam updates team details (only if not submitted)
 func (ts *TeamService) UpdateTeam(teamID, userID uint, name, description string) (*entity.Team, error) {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
 	if err != nil {
@@ -100,7 +93,6 @@ func (ts *TeamService) UpdateTeam(teamID, userID uint, name, description string)
 		return nil, exception.NotFoundError{Item: "team"}
 	}
 
-	// Check if user is the creator
 	if team.CreatorID != userID {
 		return nil, exception.ForbiddenError{Resource: "team", Message: "only team creator can update team details"}
 	}
@@ -120,7 +112,6 @@ func (ts *TeamService) UpdateTeam(teamID, userID uint, name, description string)
 	return team, nil
 }
 
-// DeleteTeam deletes a team (only creator can delete, and only if in draft status)
 func (ts *TeamService) DeleteTeam(teamID, userID uint) error {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
 	if err != nil {
@@ -135,17 +126,14 @@ func (ts *TeamService) DeleteTeam(teamID, userID uint) error {
 		return exception.ForbiddenError{Resource: "team", Message: "only team creator can delete team"}
 	}
 
-	// Check if team is still in draft status
 	if team.Status != entity.TeamStatusDraft {
 		return exception.ForbiddenError{Resource: "team", Message: "cannot delete a submitted team"}
 	}
 
-	// Delete the team
 	if err := ts.teamRepository.DeleteTeam(ts.db, teamID); err != nil {
 		return err
 	}
 
-	// Remove team reference from all members
 	members, err := ts.teamRepository.GetTeamMembers(ts.db, teamID)
 	if err == nil {
 		for _, member := range members {
@@ -157,7 +145,6 @@ func (ts *TeamService) DeleteTeam(teamID, userID uint) error {
 	return nil
 }
 
-// InviteUserByEmail invites a user to the team by email
 func (ts *TeamService) InviteUserByEmail(teamID, inviterID uint, email string) (*entity.TeamInvitation, error) {
 	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
 	if err != nil {
@@ -167,17 +154,14 @@ func (ts *TeamService) InviteUserByEmail(teamID, inviterID uint, email string) (
 		return nil, exception.NotFoundError{Item: "team"}
 	}
 
-	// Check if inviter is team creator
 	if team.CreatorID != inviterID {
 		return nil, exception.ForbiddenError{Resource: "team", Message: "only team creator can invite members"}
 	}
 
-	// Check if team is in draft status
 	if team.Status != entity.TeamStatusDraft {
 		return nil, exception.ForbiddenError{Resource: "team", Message: "cannot invite members to a submitted team"}
 	}
 
-	// Check if user exists before inviting
 	invitedUser, err := ts.userRepository.FindUserByEmail(ts.db, email)
 	if err != nil {
 		return nil, err
@@ -188,7 +172,6 @@ func (ts *TeamService) InviteUserByEmail(teamID, inviterID uint, email string) (
 		return nil, conflictErr
 	}
 
-	// Check if email is already in team
 	isMember, err := ts.teamRepository.IsTeamMember(ts.db, teamID, invitedUser.ID)
 	if err != nil {
 		return nil, err
@@ -199,7 +182,6 @@ func (ts *TeamService) InviteUserByEmail(teamID, inviterID uint, email string) (
 		return nil, conflictErr
 	}
 
-	// Check if invitation already exists for this email
 	existingInvite, err := ts.teamRepository.FindInvitationByTeamAndEmail(ts.db, teamID, email)
 	if err != nil {
 		return nil, err
@@ -210,7 +192,6 @@ func (ts *TeamService) InviteUserByEmail(teamID, inviterID uint, email string) (
 		return nil, conflictErr
 	}
 
-	// Check team member count
 	memberCount, err := ts.teamRepository.GetTeamMemberCount(ts.db, teamID)
 	if err != nil {
 		return nil, err
@@ -235,7 +216,6 @@ func (ts *TeamService) InviteUserByEmail(teamID, inviterID uint, email string) (
 	return invitation, nil
 }
 
-// AcceptInvitation accepts an invitation
 func (ts *TeamService) AcceptInvitation(invitationID, userID uint) error {
 	invitation, err := ts.teamRepository.FindInvitationByID(ts.db, invitationID)
 	if err != nil {
@@ -245,7 +225,6 @@ func (ts *TeamService) AcceptInvitation(invitationID, userID uint) error {
 		return exception.NotFoundError{Item: "invitation"}
 	}
 
-	// Check if user's email matches the invitation email
 	user, err := ts.userRepository.FindUserByID(ts.db, userID)
 	if err != nil {
 		return err
@@ -258,21 +237,18 @@ func (ts *TeamService) AcceptInvitation(invitationID, userID uint) error {
 		return exception.ForbiddenError{Resource: "invitation", Message: "invitation email does not match user email"}
 	}
 
-	// Check if invitation is pending
 	if invitation.Status != entity.InvitationStatusPending {
 		conflictErr := exception.ConflictErrors{}
 		conflictErr.Add("invitation", "invalid_status")
 		return conflictErr
 	}
 
-	// Check if user already has a team
 	if user.TeamID != nil {
 		conflictErr := exception.ConflictErrors{}
 		conflictErr.Add("user", "already_in_team")
 		return conflictErr
 	}
 
-	// Get team and check status
 	team, err := ts.teamRepository.FindTeamByID(ts.db, invitation.TeamID)
 	if err != nil {
 		return err
@@ -281,23 +257,19 @@ func (ts *TeamService) AcceptInvitation(invitationID, userID uint) error {
 		return exception.NotFoundError{Item: "team"}
 	}
 
-	// Cannot accept invitation if team is submitted
 	if team.Status != entity.TeamStatusDraft {
 		return exception.ForbiddenError{Resource: "team", Message: "cannot join a submitted team"}
 	}
 
-	// Add user to team
 	if err := ts.teamRepository.AddTeamMember(ts.db, invitation.TeamID, userID); err != nil {
 		return err
 	}
 
-	// Update user's team
 	user.TeamID = &invitation.TeamID
 	if err := ts.userRepository.UpdateUser(ts.db, user); err != nil {
 		return err
 	}
 
-	// Update invitation status
 	invitation.Status = entity.InvitationStatusAccepted
 	if err := ts.teamRepository.UpdateInvitation(ts.db, invitation); err != nil {
 		return err
@@ -306,7 +278,6 @@ func (ts *TeamService) AcceptInvitation(invitationID, userID uint) error {
 	return nil
 }
 
-// RejectInvitation rejects an invitation
 func (ts *TeamService) RejectInvitation(invitationID, userID uint) error {
 	invitation, err := ts.teamRepository.FindInvitationByID(ts.db, invitationID)
 	if err != nil {
@@ -316,7 +287,6 @@ func (ts *TeamService) RejectInvitation(invitationID, userID uint) error {
 		return exception.NotFoundError{Item: "invitation"}
 	}
 
-	// Check if user's email matches the invitation email
 	user, err := ts.userRepository.FindUserByID(ts.db, userID)
 	if err != nil {
 		return err
@@ -329,14 +299,12 @@ func (ts *TeamService) RejectInvitation(invitationID, userID uint) error {
 		return exception.ForbiddenError{Resource: "invitation", Message: "invitation email does not match user email"}
 	}
 
-	// Check if invitation is pending
 	if invitation.Status != entity.InvitationStatusPending {
 		conflictErr := exception.ConflictErrors{}
 		conflictErr.Add("invitation", "invalid_status")
 		return conflictErr
 	}
 
-	// Update invitation status
 	invitation.Status = entity.InvitationStatusRejected
 	if err := ts.teamRepository.UpdateInvitation(ts.db, invitation); err != nil {
 		return err
@@ -354,22 +322,18 @@ func (ts *TeamService) RemoveMember(teamID, userID, memberToRemoveID uint) error
 		return exception.NotFoundError{Item: "team"}
 	}
 
-	// Check if user is the creator
 	if team.CreatorID != userID {
 		return exception.ForbiddenError{Resource: "team", Message: "only team creator can remove members"}
 	}
 
-	// Prevent removing creator
 	if team.CreatorID == memberToRemoveID {
 		return exception.ForbiddenError{Resource: "team", Message: "cannot remove team creator"}
 	}
 
-	// Check if team is still in draft
 	if team.Status != entity.TeamStatusDraft {
 		return exception.ForbiddenError{Resource: "team", Message: "cannot remove members from a submitted team"}
 	}
 
-	// Check if member is actually in the team
 	isMember, err := ts.teamRepository.IsTeamMember(ts.db, teamID, memberToRemoveID)
 	if err != nil {
 		return err
@@ -380,12 +344,10 @@ func (ts *TeamService) RemoveMember(teamID, userID, memberToRemoveID uint) error
 		return conflictErr
 	}
 
-	// Remove member
 	if err := ts.teamRepository.RemoveTeamMember(ts.db, teamID, memberToRemoveID); err != nil {
 		return err
 	}
 
-	// Update user's team
 	member, err := ts.userRepository.FindUserByID(ts.db, memberToRemoveID)
 	if err != nil {
 		return err
@@ -700,5 +662,4 @@ func (ts *TeamService) GetTeamsByStatus(status entity.TeamStatus) ([]*entity.Tea
 	return ts.teamRepository.FindTeamsByStatus(ts.db, status)
 }
 
-// Ensure TeamService implements the TeamService interface
 var _ usecase.TeamService = (*TeamService)(nil)

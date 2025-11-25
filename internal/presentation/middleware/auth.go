@@ -64,6 +64,15 @@ func (am *AuthMiddleware) AuthRequired(ctx *gin.Context) {
 	ctx.Next()
 }
 
+func (am *AuthMiddleware) AdminOnly(ctx *gin.Context) {
+	userID := ctx.GetUint(am.constants.Context.ID)
+	if userID != 1 {
+		err := exception.ForbiddenError{Resource: am.constants.Field.Page, Message: "admin access only"}
+		panic(err)
+	}
+	ctx.Next()
+}
+
 func (am *AuthMiddleware) RequiredWithPermission(allowedPermissions []enum.PermissionType) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		id, exist := ctx.Get(am.constants.Context.ID)
