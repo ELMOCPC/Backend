@@ -37,3 +37,23 @@ type AuthResponse struct {
 type OTPVerificationResponse struct {
 	Message string `json:"message"`
 }
+
+type UserDetailResponse struct {
+	ID            uint   `json:"id"`
+	FirstName     string `json:"first_name"`
+	LastName      string `json:"last_name"`
+	Email         string `json:"email"`
+	Phone         string `json:"phone"`
+	TshirtSize    string `json:"tshirt_size"`
+	University    string `json:"university"`
+	StudentNumber string `json:"student_number"`
+	NationalCode  string `json:"national_code"`
+	EmailVerified bool   `json:"email_verified"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
+}
+
+type UsersResponse struct {
+	Users []*UserDetailResponse `json:"users"`
+	Total int64                 `json:"total"`
+}

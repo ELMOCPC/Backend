@@ -6,6 +6,7 @@ import (
 )
 
 func SetupAdminRoutes(routerGroup *gin.RouterGroup, app *wire.Application) {
+
 	teams := routerGroup.Group("/teams")
 	{
 		teams.GET("", app.Controllers.Customer.TeamController.GetAllTeams)
@@ -19,4 +20,10 @@ func SetupAdminRoutes(routerGroup *gin.RouterGroup, app *wire.Application) {
 		receipts.GET("/pending", app.Controllers.Customer.TeamController.GetPendingReceipts)
 		receipts.POST("/:id/verify", app.Controllers.Customer.TeamController.VerifyPaymentReceipt)
 	}
+
+	users := routerGroup.Group("/users")
+	{
+		users.GET("", app.Controllers.General.AuthController.GetAllUsers)
+	}
+
 }
