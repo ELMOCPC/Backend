@@ -5,19 +5,30 @@ import (
 
 	"github.com/ELMOCPC/Backend/internal/application/usecase"
 	"github.com/ELMOCPC/Backend/internal/domain/exception"
+	repository "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
+	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 	"github.com/ELMOCPC/Backend/internal/presentation/dto"
 	"github.com/gin-gonic/gin"
 )
 
 type AuthController struct {
-	authService usecase.AuthService
-	otpService  usecase.OTPService
+	authService    usecase.AuthService
+	otpService     usecase.OTPService
+	userRepository repository.UserRepository
+	db             database.Database
 }
 
-func NewAuthController(authService usecase.AuthService, otpService usecase.OTPService) *AuthController {
+func NewAuthController(
+	authService usecase.AuthService,
+	otpService usecase.OTPService,
+	userRepository repository.UserRepository,
+	db database.Database,
+) *AuthController {
 	return &AuthController{
-		authService: authService,
-		otpService:  otpService,
+		authService:    authService,
+		otpService:     otpService,
+		userRepository: userRepository,
+		db:             db,
 	}
 }
 
@@ -118,4 +129,38 @@ func (ac *AuthController) VerifySignUp(ctx *gin.Context) {
 	}
 
 	Response(ctx, http.StatusCreated, "account created successfully", response)
+}
+
+func (ac *AuthController) GetAllUsers(ctx *gin.Context) {
+	queryOptions := repository.NewQueryOptions()
+
+	users, total, err := ac.userRepository.FindUsers(ac.db, queryOptions)
+	if err != nil {
+		panic(err)
+	}
+
+	var userResponses []*dto.UserDetailResponse
+	for _, user := range users {
+		userResponses = append(userResponses, &dto.UserDetailResponse{
+			ID:            user.ID,
+			FirstName:     user.FirstName,
+			LastName:      user.LastName,
+			Email:         user.Email,
+			Phone:         user.Phone,
+			TshirtSize:    string(user.TshirtSize),
+			University:    user.University,
+			StudentNumber: user.StudentNumber,
+			NationalCode:  user.NationalCode,
+			EmailVerified: user.EmailVerified,
+			CreatedAt:     user.CreatedAt.Format("2006-01-02 15:04:05"),
+			UpdatedAt:     user.UpdatedAt.Format("2006-01-02 15:04:05"),
+		})
+	}
+
+	response := &dto.UsersResponse{
+		Users: userResponses,
+		Total: total,
+	}
+
+	Response(ctx, http.StatusOK, "users retrieved successfully", response)
 }

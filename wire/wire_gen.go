@@ -59,7 +59,7 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 	emailService := service.NewEmailService(emailConfig)
 	otpService := service.NewOTPService(redisCache, emailService, env)
 	authService := service.NewAuthService(userRepository, jwtService, otpService, redisCache, postgresDatabase)
-	authController := controller.NewAuthController(authService, otpService)
+	authController := controller.NewAuthController(authService, otpService, userRepository, postgresDatabase)
 	generalControllers := &GeneralControllers{
 		AuthController: authController,
 	}

@@ -75,6 +75,35 @@ func (tis *TeamInvitationServiceImpl) SendInvitations(teamID, invitedByID uint, 
 	var tokens []string
 
 	for _, member := range members {
+		// Check if phone is already linked to a different email
+		existingUserByPhone, err := tis.userRepository.FindUserByPhone(tis.db, member.Phone)
+		if err != nil {
+			return nil, err
+		}
+		if existingUserByPhone != nil && existingUserByPhone.Email != member.Email {
+			conflictErr := exception.ConflictErrors{}
+			conflictErr.Add("phone", fmt.Sprintf("%s is already linked to another email", member.Phone))
+			return nil, conflictErr
+		}
+
+		// Check if email exists with a different phone number
+		existingUserByEmail, err := tis.userRepository.FindUserByEmail(tis.db, member.Email)
+		if err != nil {
+			return nil, err
+		}
+		if existingUserByEmail != nil && existingUserByEmail.Phone != member.Phone {
+			conflictErr := exception.ConflictErrors{}
+			conflictErr.Add("email", fmt.Sprintf("%s is registered with a different phone number", member.Email))
+			return nil, conflictErr
+		}
+
+		// Check if user already has a team
+		if existingUserByEmail != nil && existingUserByEmail.TeamID != nil {
+			conflictErr := exception.ConflictErrors{}
+			conflictErr.Add("email", fmt.Sprintf("%s is already in a team", member.Email))
+			return nil, conflictErr
+		}
+
 		// Check if email is already member
 		for _, teamMember := range team.Members {
 			if teamMember.Email == member.Email {
@@ -129,7 +158,7 @@ func (tis *TeamInvitationServiceImpl) SendInvitations(teamID, invitedByID uint, 
 		}
 
 		invitationLink := fmt.Sprintf(
-			"https://84.32.41.215/accept-invite?token=%s",
+			"https://elmocpc.ir/accept-invite?token=%s",
 			token,
 		)
 
@@ -200,8 +229,22 @@ func (tis *TeamInvitationServiceImpl) AcceptInvitation(token string) (*entity.Us
 	var user *entity.User
 
 	if existingUser != nil {
-		// User already exists, just add to team
+		// User already exists, validate and add to team
 		user = existingUser
+
+		// Check if user is already in a team
+		if user.TeamID != nil {
+			conflictErr := exception.ConflictErrors{}
+			conflictErr.Add("user", "already in a team")
+			return nil, "", "", conflictErr
+		}
+
+		// Validate that the phone number matches
+		if user.Phone != invitationToken.Phone {
+			conflictErr := exception.ConflictErrors{}
+			conflictErr.Add("phone", "phone number does not match existing account")
+			return nil, "", "", conflictErr
+		}
 	} else {
 		// Create new user with stored details
 		// Check if phone is unique
@@ -235,6 +278,12 @@ func (tis *TeamInvitationServiceImpl) AcceptInvitation(token string) (*entity.Us
 
 	// Add user to team
 	if err := tis.teamRepository.AddTeamMember(tis.db, invitationToken.TeamID, user.ID); err != nil {
+		return nil, "", "", err
+	}
+
+	// Update user's TeamID
+	user.TeamID = &invitationToken.TeamID
+	if err := tis.userRepository.UpdateUser(tis.db, user); err != nil {
 		return nil, "", "", err
 	}
 

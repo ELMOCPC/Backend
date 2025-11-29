@@ -54,11 +54,8 @@ func (repo *TeamRepository) DeleteTeam(db database.Database, id uint) error {
 // Team members operations
 
 func (repo *TeamRepository) AddTeamMember(db database.Database, teamID, userID uint) error {
-	team := &entity.Team{}
-	team.ID = teamID
-	user := &entity.User{}
-	user.ID = userID
-	return db.GetDB().Model(team).Association("Members").Append(user)
+	// Use raw SQL to insert into the many-to-many join table
+	return db.GetDB().Exec("INSERT INTO team_members (team_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING", teamID, userID).Error
 }
 
 func (repo *TeamRepository) RemoveTeamMember(db database.Database, teamID, userID uint) error {
