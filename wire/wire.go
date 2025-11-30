@@ -10,8 +10,8 @@ import (
 	domainCache "github.com/ELMOCPC/Backend/internal/domain/repository/cache"
 	domainPostgre "github.com/ELMOCPC/Backend/internal/domain/repository/postgres"
 	domainS3 "github.com/ELMOCPC/Backend/internal/domain/storage/s3"
-	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 	infraCache "github.com/ELMOCPC/Backend/internal/infrastructure/cache"
+	"github.com/ELMOCPC/Backend/internal/infrastructure/database"
 	infraJWT "github.com/ELMOCPC/Backend/internal/infrastructure/jwt"
 	infraLocalization "github.com/ELMOCPC/Backend/internal/infrastructure/localization"
 	infraPostgre "github.com/ELMOCPC/Backend/internal/infrastructure/repository/postgres"
@@ -90,6 +90,7 @@ var MiddlewareProviderSet = wire.NewSet(
 	middleware.NewRecoveryMiddleware,
 	middleware.NewLocalizationMiddleware,
 	middleware.NewAuthMiddleware,
+	middleware.NewRateLimitMiddleware,
 	wire.Struct(new(Middlewares), "*"),
 )
 
@@ -195,6 +196,7 @@ type Middlewares struct {
 	Recovery     *middleware.RecoveryMiddleware
 	Localization *middleware.LocalizationMiddleware
 	Auth         *middleware.AuthMiddleware
+	RateLimit    *middleware.RateLimitMiddleware
 }
 
 type Seeds struct {

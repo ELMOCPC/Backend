@@ -8,11 +8,19 @@ import (
 func SetupGeneralRoutes(routerGroup *gin.RouterGroup, app *wire.Application) {
 	auth := routerGroup.Group("/auth")
 	{
-		auth.POST("/signup", app.Controllers.General.AuthController.SignUp)
-		auth.POST("/signup/verify", app.Controllers.General.AuthController.VerifySignUp)
+		signup := auth.Group("/signup")
+		signup.Use(app.Middlewares.RateLimit.SignupRateLimit())
+		{
+			signup.POST("", app.Controllers.General.AuthController.SignUp)
+			signup.POST("/verify", app.Controllers.General.AuthController.VerifySignUp)
+		}
 
-		auth.POST("/login", app.Controllers.General.AuthController.Login)
-		auth.POST("/login/verify", app.Controllers.General.AuthController.VerifyLogin)
+		login := auth.Group("/login")
+		login.Use(app.Middlewares.RateLimit.LoginRateLimit())
+		{
+			login.POST("", app.Controllers.General.AuthController.Login)
+			login.POST("/verify", app.Controllers.General.AuthController.VerifyLogin)
+		}
 	}
 
 	invitations := routerGroup.Group("/invitations")

@@ -46,11 +46,13 @@ func InitializeApplication(config *bootstrap.Config) (*Application, error) {
 	jwtService := service.NewJWTService(keyManager, jwtKeysPath)
 	userRepository := postgres.NewUserRepository()
 	authMiddleware := middleware.NewAuthMiddleware(constants, jwtService, userRepository, postgresDatabase)
+	rateLimitMiddleware := middleware.NewRateLimitMiddleware(redisDatabase)
 	middlewares := &Middlewares{
 		Cors:         corsMiddleware,
 		Recovery:     recoveryMiddleware,
 		Localization: localizationMiddleware,
 		Auth:         authMiddleware,
+		RateLimit:    rateLimitMiddleware,
 	}
 	env := ProvideEnv(config)
 	client := bootstrap.ProvideRedisClient(env)
@@ -110,7 +112,7 @@ var ControllerProviderSet = wire.NewSet(wire.Struct(new(Controllers), "*"))
 
 var AdapterProviderSet = wire.NewSet(jwt.NewJWTKeyManager, localization.NewTranslationService, storage.NewS3Storage, wire.Bind(new(s3.S3Storage), new(*storage.S3Storage)))
 
-var MiddlewareProviderSet = wire.NewSet(middleware.NewCorsMiddleware, middleware.NewRecoveryMiddleware, middleware.NewLocalizationMiddleware, middleware.NewAuthMiddleware, wire.Struct(new(Middlewares), "*"))
+var MiddlewareProviderSet = wire.NewSet(middleware.NewCorsMiddleware, middleware.NewRecoveryMiddleware, middleware.NewLocalizationMiddleware, middleware.NewAuthMiddleware, middleware.NewRateLimitMiddleware, wire.Struct(new(Middlewares), "*"))
 
 var SeedProviderSet = wire.NewSet(seed.NewRoleSeeder, wire.Struct(new(Seeds), "*"))
 
@@ -211,6 +213,7 @@ type Middlewares struct {
 	Recovery     *middleware.RecoveryMiddleware
 	Localization *middleware.LocalizationMiddleware
 	Auth         *middleware.AuthMiddleware
+	RateLimit    *middleware.RateLimitMiddleware
 }
 
 type Seeds struct {
