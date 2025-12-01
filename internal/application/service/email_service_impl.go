@@ -113,6 +113,21 @@ ELMOCPC Team
 	return es.sendEmail(toEmail, subject, body)
 }
 
+func (es *EmailService) SendTeamResetNotification(toEmail, toName, teamName string) error {
+	subject := fmt.Sprintf("Team '%s' reset - Please resubmit", teamName)
+	body := fmt.Sprintf(`
+Dear %s,
+
+Your team "%s" has been reset and is now back in draft status.
+
+You can now review your team information and resubmit when ready.
+
+Best regards,
+ELMOCPC Team
+`, toName, teamName)
+	return es.sendEmail(toEmail, subject, body)
+}
+
 func (es *EmailService) SendReceiptApprovedNotification(toEmail, toName, teamName string) error {
 	subject := fmt.Sprintf("Congratulations! Team '%s' officially accepted", teamName)
 	body := fmt.Sprintf(`

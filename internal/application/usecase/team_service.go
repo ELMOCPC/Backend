@@ -28,6 +28,7 @@ type TeamService interface {
 	// Team validation (admin operations)
 	ValidateTeam(teamID uint) (*entity.Team, error)
 	RejectTeam(teamID uint) (*entity.Team, error)
+	ResetTeamToDraft(teamID uint) (*entity.Team, error)
 	GetPendingTeams() ([]*entity.Team, error)
 	GetAllTeams() ([]*entity.Team, error)
 	GetTeamsByStatus(status entity.TeamStatus) ([]*entity.Team, error)

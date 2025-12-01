@@ -649,6 +649,29 @@ func (ts *TeamService) RejectTeam(teamID uint) (*entity.Team, error) {
 	return team, nil
 }
 
+func (ts *TeamService) ResetTeamToDraft(teamID uint) (*entity.Team, error) {
+	team, err := ts.teamRepository.FindTeamByID(ts.db, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if team == nil {
+		return nil, exception.NotFoundError{Item: "team"}
+	}
+
+	if team.Status != entity.TeamStatusRejected {
+		conflictErr := exception.ConflictErrors{}
+		conflictErr.Add("team", "invalid_status")
+		return nil, conflictErr
+	}
+
+	team.Status = entity.TeamStatusDraft
+	if err := ts.teamRepository.UpdateTeam(ts.db, team); err != nil {
+		return nil, err
+	}
+
+	return team, nil
+}
+
 func (ts *TeamService) GetPendingTeams() ([]*entity.Team, error) {
 	return ts.teamRepository.FindTeamsByStatus(ts.db, entity.TeamStatusSubmitted)
 }
