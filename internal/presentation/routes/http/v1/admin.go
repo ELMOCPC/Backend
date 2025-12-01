@@ -13,6 +13,7 @@ func SetupAdminRoutes(routerGroup *gin.RouterGroup, app *wire.Application) {
 		teams.GET("/:id", app.Controllers.Customer.TeamController.GetTeamByIDAdmin)
 		teams.POST("/:id/validate", app.Controllers.Customer.TeamController.ValidateTeam)
 		teams.POST("/:id/reject", app.Controllers.Customer.TeamController.RejectTeam)
+		teams.POST("/:id/reset-to-draft", app.Controllers.Customer.TeamController.ResetTeamToDraft)
 	}
 
 	receipts := routerGroup.Group("/receipts")

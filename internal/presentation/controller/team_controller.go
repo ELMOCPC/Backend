@@ -552,6 +552,26 @@ func (tc *TeamController) RejectTeam(ctx *gin.Context) {
 	Response(ctx, http.StatusOK, "team rejected successfully", response)
 }
 
+func (tc *TeamController) ResetTeamToDraft(ctx *gin.Context) {
+	teamID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		Response(ctx, http.StatusBadRequest, "invalid team id", nil)
+		return
+	}
+
+	team, err := tc.teamService.ResetTeamToDraft(uint(teamID))
+	if err != nil {
+		panic(err)
+	}
+
+	for _, member := range team.Members {
+		_ = tc.emailService.SendTeamResetNotification(member.Email, member.FirstName, team.Name)
+	}
+
+	response := tc.mapTeamResponse(team)
+	Response(ctx, http.StatusOK, "team reset to draft successfully", response)
+}
+
 func (tc *TeamController) GetAllTeams(ctx *gin.Context) {
 	status := ctx.Query("status")
 
